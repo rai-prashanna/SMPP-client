@@ -30,11 +30,12 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	defer wg.Done()
 	_ = godotenv.Load() // ignore error; .env is optional
 	server := os.Getenv("SMPP_HOST") + ":" + os.Getenv("SMPP_PORT")
-	system_id := os.Getenv("SYSTEM_ID")
+	systemId := os.Getenv("SYSTEM_ID")
 	password := os.Getenv("PASSWORD")
+
 	auth := gosmpp.Auth{
 		SMSC:       server,
-		SystemID:   system_id,
+		SystemID:   systemId,
 		Password:   password,
 		SystemType: "",
 	}
@@ -71,9 +72,11 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 				fmt.Println(state)
 			},
 		}, 5*time.Second)
+
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer func() {
 		_ = trans.Close()
 	}()
@@ -87,12 +90,24 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	}
 }
 
+var requestTracker = make(map[int32]*pdu.SubmitSM) // Track request based on sequence_number
+
 func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 	concatenated := map[uint8][]string{}
 	return func(p pdu.PDU, _ bool) {
-		switch pd := p.(type) {
+		// Print out the received PDU type and details
+		switch responsePdu := p.(type) {
 		case *pdu.SubmitSMResp:
-			fmt.Printf("SubmitSMResp:%+v\n", pd)
+			// Track the response based on sequence number
+			requestPDU, exists := requestTracker[responsePdu.SequenceNumber]
+			if exists {
+				log.Printf("Request: %+v\n", requestPDU) // Print the corresponding request details
+
+				log.Printf("Received SubmitSMResp for SequenceNumber %+v\n", responsePdu)
+			} else {
+				log.Printf("No matching SubmitSM request for SequenceNumber %+v\n", responsePdu)
+			}
+			//fmt.Printf("SubmitSMResp:%+v\n", response_pdu)
 
 		case *pdu.GenericNack:
 			fmt.Println("GenericNack Received")
@@ -101,17 +116,18 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 			fmt.Println("EnquireLinkResp Received")
 
 		case *pdu.DataSM:
-			fmt.Printf("DataSM:%+v\n", pd)
+			fmt.Printf("DataSM:%+v\n", responsePdu)
 
 		case *pdu.DeliverSM:
-			fmt.Printf("DeliverSM:%+v\n", pd)
-			log.Println(pd.Message.GetMessage())
+			fmt.Printf("DeliverSM:%+v\n", responsePdu)
+			log.Println(responsePdu.Message.GetMessage())
+
 			// region concatenated sms (sample code)
-			message, err := pd.Message.GetMessage()
+			message, err := responsePdu.Message.GetMessage()
 			if err != nil {
 				log.Fatal(err)
 			}
-			totalParts, sequence, reference, found := pd.Message.UDH().GetConcatInfo()
+			totalParts, sequence, reference, found := responsePdu.Message.UDH().GetConcatInfo()
 			if found {
 				if _, ok := concatenated[reference]; !ok {
 					concatenated[reference] = make([]string, totalParts)
@@ -125,22 +141,17 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 				delete(concatenated, reference)
 			}
 			// endregion
+
 		case *pdu.UnbindResp:
-			fmt.Printf("DeliverSM:%+v\n", pd)
+			fmt.Printf("UnbindResp:%+v\n", responsePdu)
 			fmt.Println("UnbindResp received — closing session...")
 			if *trans != nil {
 				_ = (*trans).Close()
 			}
+
 		default:
-			log.Printf("Unhandled PDU type: %T", pd)
-			//log.Printf("Closing session: %T", pd)
-			//err := c.Close()
-			//if err != nil {
-			//	log.Printf("unable to close session: %T", pd)
-			//
-			//	return
-			//}
-			//log.Printf("CLosed session: %T", pd)
+			// Handling unhandled PDUs
+			log.Printf("Unhandled PDU type: %T", responsePdu)
 		}
 	}
 }
@@ -148,9 +159,9 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 func newSubmitSM() *pdu.SubmitSM {
 	// build up submitSM
 	srcAddr := pdu.NewAddress()
-	srcAddr.SetTon(5)
+	srcAddr.SetTon(1)
 	srcAddr.SetNpi(0)
-	_ = srcAddr.SetAddress("00" + "522241")
+	_ = srcAddr.SetAddress("00")
 
 	destAddr := pdu.NewAddress()
 	destAddr.SetTon(1)
@@ -165,7 +176,8 @@ func newSubmitSM() *pdu.SubmitSM {
 	submitSM.RegisteredDelivery = 1
 	submitSM.ReplaceIfPresentFlag = 0
 	submitSM.EsmClass = 0
-
+	// Track the request by sequence_number
+	requestTracker[submitSM.SequenceNumber] = submitSM
 	return submitSM
 }
 
