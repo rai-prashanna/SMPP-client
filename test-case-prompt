@@ -1,0 +1,70 @@
+Generate a set of test cases for sending PDU (Protocol Data Unit) messages to SMSCs (Short Message Service Centers). Each test case must include a JSON object with two keys: `input_pdu` (PDU object representing the input) and `expected_output_pdu` (PDU object representing the expected outcome). The overall test case structure should be a valid JSON array containing these objects, ensuring it complies with the `json.load` function in Python.
+
+# Requirements
+- The test case should be a valid JSON array.
+- Each test case JSON object includes:
+  - `input_pdu`: A representation of the incoming PDU object.
+  - `expected_output_pdu`: A representation of the processed or expected PDU output.
+- The data structure must pass the `json.load` function for parsing.
+- Example PDUs should account for various cases, including both valid and edge cases (e.g., too-short inputs, incorrect encodings, special characters).
+
+# Output Format
+
+The output must be formatted as a valid JSON array. Indentation is optional but must remain compatible with `json.load`. Each element in the array must be a dictionary with specific fields as described in the requirements.
+
+# Examples
+
+Here are examples of the test case format:
+
+```json
+[
+  {
+    "input_pdu": {
+      "message_body": "Hello, World!",
+      "encoding": "7-bit",
+      "receiver_address": "1234567890",
+      "sender_address": "0987654321"
+    },
+    "expected_output_pdu": {
+      "message_body": "Hello, World!",
+      "encoding": "7-bit",
+      "receiver_address": "1234567890",
+      "sender_address": "0987654321",
+      "delivery_status": "delivered"
+    }
+  },
+  {
+    "input_pdu": {
+      "message_body": "Test ☺",
+      "encoding": "16-bit",
+      "receiver_address": "1112223333",
+      "sender_address": "3332221111"
+    },
+    "expected_output_pdu": {
+      "message_body": "Test ☺",
+      "encoding": "16-bit",
+      "receiver_address": "1112223333",
+      "sender_address": "3332221111",
+      "delivery_status": "delivered"
+    }
+  },
+  {
+    "input_pdu": {
+      "message_body": "",
+      "encoding": "7-bit",
+      "receiver_address": "9876543210",
+      "sender_address": "0123456789"
+    },
+    "expected_output_pdu": {
+      "delivery_status": "failed",
+      "error": "Empty message body"
+    }
+  }
+]
+```
+
+# Notes
+
+- Test cases should include edge cases, like invalid encodings, too-short fields, missing fields, or unsupported characters.
+- Produce at least 5 test cases, including cases with valid inputs, invalid inputs, and edge cases.
+- Ensure the output JSON array is well-structured and compliant with the `json.load` function in Python.
