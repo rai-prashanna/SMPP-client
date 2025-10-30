@@ -1,0 +1,94 @@
+{
+  "test_case_id": "TC_SMPP_SUBMIT_SM_001",
+  "test_objective": "Verify that the SMCC accepts a valid SMPP v3.4 submit_sm PDU and returns a submit_sm_resp with success status and a valid message_id.",
+  "preconditions": [
+    "SMCC SMPP interface is running and reachable from the test client.",
+    "SMPP session has been bound as a transceiver/submitter prior to sending submit_sm.",
+    "Sequence number space is clear for the test (no outstanding PDUs with sequence_number=1)."
+  ],
+  "steps": [
+    "Construct a valid SMPP v3.4 submit_sm PDU with the fields below.",
+    "Send the submit_sm PDU to the SMCC SMPP port over the established SMPP session.",
+    "Wait for an immediate response (submit_sm_resp) from the server (timeout: 5 seconds).",
+    "Validate the received PDU against the expected response fields and raw bytes."
+  ],
+  "timeout_seconds": 5,
+  "input": {
+    "protocol": "SMPP v3.4",
+    "pdu": {
+      "name": "submit_sm",
+      "header": {
+        "command_length": 75,
+        "command_length_hex": "0x0000004B",
+        "command_id": 4,
+        "command_id_hex": "0x00000004",
+        "command_status": 0,
+        "sequence_number": 1
+      },
+      "body": {
+        "service_type": "CMT",
+        "source_addr_ton": 1,
+        "source_addr_npi": 1,
+        "source_addr": "12345",
+        "dest_addr_ton": 1,
+        "dest_addr_npi": 1,
+        "destination_addr": "447700900000",
+        "esm_class": 0,
+        "protocol_id": 0,
+        "priority_flag": 1,
+        "schedule_delivery_time": "",
+        "validity_period": "",
+        "registered_delivery": 1,
+        "replace_if_present_flag": 0,
+        "data_coding": 0,
+        "sm_default_msg_id": 0,
+        "sm_length": 22,
+        "short_message": "Test message from SMCC"
+      },
+      "raw_hex": "0000004b000000040000000000000001434d540001013132333435000101343437373030393030303030000000010000010000001654657374206d6573736167652066726f6d20534d4343"
+    }
+  },
+  "expected_output": {
+    "protocol": "SMPP v3.4",
+    "pdu": {
+      "name": "submit_sm_resp",
+      "header": {
+        "command_length": 27,
+        "command_length_hex": "0x0000001B",
+        "command_id_hex": "0x80000004",
+        "command_id_decimal": 2147483652,
+        "command_status": 0,
+        "sequence_number": 1
+      },
+      "body": {
+        "message_id": "1234567890"
+      },
+      "raw_hex": "0000001b8000000400000000000000013132333435363738393000"
+    },
+    "notes": [
+      "A successful submit_sm_resp must be returned with command_status=0 and the same sequence_number as the request.",
+      "The message_id returned should be a non-empty C-Octet string (here '1234567890').",
+      "Because registered_delivery=1 in the request, the system may later generate a deliver_sm (delivery receipt). This test only verifies the immediate submit_sm_resp."
+    ]
+  },
+  "pass_criteria": [
+    "A PDU is received within the timeout.",
+    "Received PDU has command_id == 0x80000004 (submit_sm_resp).",
+    "Received PDU command_status == 0 (ESME_ROK).",
+    "Received PDU sequence_number equals the request sequence_number (1).",
+    "Received message_id is present and non-empty (e.g., matches /^[A-Za-z0-9._-]+$/).",
+    "Optionally: received raw_hex matches expected raw hex exactly (if deterministic message_id is used); otherwise validate message_id format only."
+  ],
+  "fail_criteria": [
+    "No response within timeout.",
+    "Response command_status != 0 (indicates server-side error).",
+    "Response command_id is not submit_sm_resp (0x80000004).",
+    "sequence_number mismatch between request and response.",
+    "Malformed PDU or server returns generic_nack with command_status indicating protocol error."
+  ],
+  "notes": [
+    "All string fields encoded as C-Octet strings (null-terminated) per SMPP v3.4 in the raw_hex.",
+    "Raw hex representations are big-endian 4-byte header fields followed by body bytes.",
+    "If additional TLVs or message_payload are expected by the SMCC in production, extend the body and raw_hex accordingly."
+  ]
+}

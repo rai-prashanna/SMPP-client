@@ -1,0 +1,614 @@
+[
+  {
+    "TestCase": "TC001_BindTransmitter_Positive",
+    "Description": "Successful bind as transmitter (ESME -> SMSC).",
+    "Category": "Session Establishment",
+    "Input": "Bind_Transmitter PDU: sequence_id=1, system_id='esme01', password='p@ssw0rd', system_type='SMPP', interface_version=0x34, addr_ton=0x00, addr_npi=0x00, address_range=''.",
+    "ExpectedOutput": "Bind_Transmitter_RESP PDU: sequence_id=1, command_status=ESME_ROK (0), system_id returned (e.g., 'SMSC'). ESME state = BOUND_TX.",
+    "Steps": "1. Open TCP connection to SMPP server. 2. Send Bind_Transmitter PDU as above. 3. Validate Bind_Transmitter_RESP is received with command_status ESME_ROK and sequence_id=1. 4. Verify session state on server side is BOUND_TX (if server management API exists).",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC002_BindReceiver_Positive",
+    "Description": "Successful bind as receiver (SMSC -> ESME MO and DLR delivery possible).",
+    "Category": "Session Establishment",
+    "Input": "Bind_Receiver PDU: sequence_id=2, system_id='esme_rcv', password='recvpass', interface_version=0x34, addr_ton=0x00, addr_npi=0x00.",
+    "ExpectedOutput": "Bind_Receiver_RESP PDU: sequence_id=2, command_status=ESME_ROK, system_id returned and ESME state = BOUND_RX.",
+    "Steps": "1. Open TCP connection. 2. Send Bind_Receiver PDU. 3. Validate Bind_Receiver_RESP received with ESME_ROK and same sequence_id. 4. Ensure server may now send deliver_sm PDUs to this session.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC003_BindTransceiver_Positive",
+    "Description": "Successful bind as transceiver (both submit and receive allowed).",
+    "Category": "Session Establishment",
+    "Input": "Bind_Transceiver PDU: sequence_id=3, system_id='esme_trx', password='trxpass', interface_version=0x34, addr_ton=0x00, addr_npi=0x00.",
+    "ExpectedOutput": "Bind_Transceiver_RESP PDU: sequence_id=3, command_status=ESME_ROK, system_id returned; ESME state = BOUND_TRX.",
+    "Steps": "1. Connect. 2. Send Bind_Transceiver PDU. 3. Validate response and verify ability to send Submit_SM and receive Deliver_SM.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC004_BindInvalidCredentials",
+    "Description": "Attempt to bind with incorrect credentials; authentication must fail.",
+    "Category": "Error Case",
+    "Input": "Bind_Transmitter PDU: sequence_id=4, system_id='esme01', password='wrongpass'.",
+    "ExpectedOutput": "Bind_Transmitter_RESP PDU: sequence_id=4, command_status=ESME_RINVPASWD (invalid password) or appropriate authentication failure code; connection may remain open or closed per vendor policy.",
+    "Steps": "1. Open TCP connection. 2. Send Bind_Transmitter with wrong credentials. 3. Validate Bind_Transmitter_RESP contains authentication error code. 4. Attempt to send Submit_SM should be rejected if Bind failed.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC005_BindAlreadyBound_SameCredentials",
+    "Description": "Attempt second bind using same system_id/credentials concurrently (test 'already bound' handling).",
+    "Category": "Session Establishment / Error Case",
+    "Input": "1) Bind_Transceiver from client A (successful). 2) Bind_Transceiver from client B using same system_id/password without unbinding client A.",
+    "ExpectedOutput": "Second bind should be rejected or handled per server policy. Expected Bind_Transceiver_RESP for second bind with non-zero command_status (e.g., ESME_RALYBND or vendor-specific 'already bound' error) or server may close older session and allow new one (documented server behavior).",
+    "Steps": "1. Client A connects and binds successfully. 2. Client B connects and attempts to bind with same credentials. 3. Validate server response for client B indicates already bound or other documented behavior. 4. Validate server-side session state (single or multiple sessions) per vendor policy.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC006_BindUnsupportedInterfaceVersion",
+    "Description": "Bind with an unsupported interface_version (e.g., 0x50) to ensure server handles version negotiation or rejects the bind.",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "Bind_Transceiver PDU: sequence_id=6, system_id='esme01', password='p@ss', interface_version=0x50 (unsupported by server that implements v3.4).",
+    "ExpectedOutput": "Bind_Transceiver_RESP with non-zero command_status indicating unsupported interface version or vendor-specific error. Server may return ESME_ROK if it ignores version or accept but document behavior.",
+    "Steps": "1. Connect. 2. Send Bind_Transceiver with unusual interface_version. 3. Validate Bind_Transceiver_RESP; check command_status and server behaviour documented in spec/implementation. 4. If accepted, ensure subsequent PDUs behave as for the negotiated/declared version.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC007_Unbind_Flow",
+    "Description": "Graceful unbind from ESME to SMSC and expected server behavior.",
+    "Category": "Session Establishment",
+    "Input": "Unbind PDU: sequence_id=7 after an established bind.",
+    "ExpectedOutput": "Unbind_RESP PDU: sequence_id=7, command_status=ESME_ROK and connection is closed gracefully by server or as per SMPP spec.",
+    "Steps": "1. Bind successfully (any bind). 2. Send Unbind PDU. 3. Validate Unbind_RESP received with ESME_ROK. 4. Confirm server closes the connection after Unbind_RESP.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC010_SubmitSM_Positive",
+    "Description": "Submit a basic short message (MT) using Submit_SM and verify Submit_SM_RESP and message_id.",
+    "Category": "Core Operation",
+    "Input": "Submit_SM PDU: sequence_id=10, source_addr_ton=0x05 (alphanumeric) source_addr='SENDER', dest_addr_ton=0x01 dest_addr_npi=0x01 dest_addr='1234567890', short_message='Hello World', data_coding=0x00 (GSM7), registered_delivery=0x00.",
+    "ExpectedOutput": "Submit_SM_RESP PDU: sequence_id=10, command_status=ESME_ROK, message_id='MSG123456'.",
+    "Steps": "1. Bind as transmitter or transceiver. 2. Send the Submit_SM PDU. 3. Verify receipt of Submit_SM_RESP with same sequence_id and command_status=ESME_ROK. 4. Note message_id for query/cancel operations.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC011_SubmitSM_WithRegisteredDelivery_Expect_DLR",
+    "Description": "Submit_SM with registered_delivery requesting a delivery receipt and validate that a Deliver_SM (DLR) arrives at a bound receiver/transceiver.",
+    "Category": "Message Flow / Core Operation",
+    "Input": "Submit_SM PDU: sequence_id=11, same fields as TC010 but registered_delivery=0x01. Receiver session bound (transceiver or receiver) to accept DLRs.",
+    "ExpectedOutput": "1) Submit_SM_RESP: sequence_id=11, ESME_ROK, message_id='MSG123'. 2) Later: Deliver_SM PDU to bound receiver: esm_class set to delivery_receipt (DLR), short_message contains delivery receipt including id='MSG123' and stat='DELIVRD'. Deliver_SM_RESP with ESME_ROK must be sent by ESME to acknowledge.",
+    "Steps": "1. Bind client A as transmitter and client B as receiver (or same transceiver). 2. Client A sends Submit_SM with registered_delivery=1. 3. Validate Submit_SM_RESP. 4. Wait up to configured SLA for DLR from SMSC to receiver. 5. Validate receipt format and message_id/stat match the original message_id and expected final status.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC012_DeliverSM_MO_Positive",
+    "Description": "SMSC sends a MO message to a bound receiver (Deliver_SM) and expects a Deliver_SM_RESP.",
+    "Category": "Message Flow / Core Operation",
+    "Input": "Deliver_SM PDU (from SMSC to ESME): sequence_id=12, source_addr='447700900123' (MSISDN), dest_addr='SERVICE', short_message='User MO text', esm_class=0x00 (normal), data_coding=0x00.",
+    "ExpectedOutput": "Deliver_SM_RESP PDU: sequence_id=12, command_status=ESME_ROK. ESME must respond timely to prevent re-delivery.",
+    "Steps": "1. Bind ESME as receiver or transceiver. 2. Simulate or allow SMSC to send a Deliver_SM. 3. Validate ESME responds with Deliver_SM_RESP having the same sequence_id and ESME_ROK. 4. Validate content received by ESME matches source/destination and message body.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC013_DeliveryReceipt_Format_Parsing",
+    "Description": "Validate parsing and format of standard delivery receipts (DLR) delivered via Deliver_SM with esm_class indicating receipt.",
+    "Category": "Message Flow / Protocol Adherence",
+    "Input": "Deliver_SM PDU: sequence_id=13, esm_class=0x04 (delivery receipt), short_message='id:MSG123 sub:001 dlvrd:001 submit date:2001011200 done date:2001011205 stat:DELIVRD err:000 text:Hello'.",
+    "ExpectedOutput": "Deliver_SM_RESP: sequence_id=13, command_status=ESME_ROK. ESME must extract message_id=MSG123 and stat=DELIVRD and map to internal delivery status.",
+    "Steps": "1. Bind receiver. 2. Receive Deliver_SM with delivery receipt payload. 3. Send Deliver_SM_RESP with ESME_ROK. 4. Validate parsing of id and stat fields and check internal state updated to 'Delivered'.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC014_QuerySM_Positive",
+    "Description": "Query the status of a previously submitted message using Query_SM.",
+    "Category": "Core Operation",
+    "Input": "Query_SM PDU: sequence_id=14, message_id='MSG123', source_addr='SENDER', source_addr_ton=0x05.",
+    "ExpectedOutput": "Query_SM_RESP PDU: sequence_id=14, command_status=ESME_ROK, message_id='MSG123', final_date/time if available, message_state indicating current status (e.g., delivered/pending), error_code if relevant.",
+    "Steps": "1. Ensure message with message_id 'MSG123' exists (submit earlier). 2. Send Query_SM. 3. Validate Query_SM_RESP contains expected message_state and details.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC015_CancelSM_Positive",
+    "Description": "Cancel a previously submitted but not yet delivered message using Cancel_SM.",
+    "Category": "Core Operation",
+    "Input": "Cancel_SM PDU: sequence_id=15, message_id='MSG_CANCEL', source_addr='SENDER', dest_addr='1234567890'.",
+    "ExpectedOutput": "Cancel_SM_RESP PDU: sequence_id=15, command_status=ESME_ROK if message canceled; otherwise appropriate non-zero status (e.g., message already delivered).",
+    "Steps": "1. Submit a message that remains queued. 2. Send Cancel_SM for that message_id. 3. Validate Cancel_SM_RESP with ESME_ROK and verify message is not delivered to handset.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC016_ReplaceSM_Positive",
+    "Description": "Replace an outstanding message in SMSC queue using Replace_SM.",
+    "Category": "Core Operation",
+    "Input": "Replace_SM PDU: sequence_id=16, message_id='MSG_REPL', source_addr='SENDER', new_short_message='Updated text', replace_if_present_flag=0x00.",
+    "ExpectedOutput": "Replace_SM_RESP PDU: sequence_id=16, command_status=ESME_ROK if replacement succeeded; else error code indicating replacement failed or message not found.",
+    "Steps": "1. Place a message in the outgoing queue. 2. Send Replace_SM targeting message_id. 3. Validate response and verify new content delivered to handset (if possible).",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC017_DataSM_Positive",
+    "Description": "Use Data_SM for two-way SMS (if supported) and validate Data_SM_RESP behavior.",
+    "Category": "Core Operation / Protocol Adherence",
+    "Input": "Data_SM PDU: sequence_id=17, service_type='CMT', source_addr='1234', dest_addr='5678', esm_class=0x00, data_coding=0x00, short_message='Payload or binary data'.",
+    "ExpectedOutput": "Data_SM_RESP PDU: sequence_id=17, command_status=ESME_ROK and optional message_id if forwarded or accepted.",
+    "Steps": "1. Bind as transceiver. 2. Send Data_SM. 3. Validate Data_SM_RESP with ESME_ROK. 4. Verify server forwards or processes appropriately.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC020_SubmitSM_UDH_Multipart",
+    "Description": "Submit segmented (concatenated) message via UDH in short_message with UDHI bit set and verify processing.",
+    "Category": "Core Operation / Edge Case",
+    "Input": "Submit_SM PDUs (two segments): each PDU esm_class includes UDHI bit set (0x40), short_message begins with UDH (e.g., 0x05 0x00 0x03 <ref> <total> <seq>) followed by payload segment.",
+    "ExpectedOutput": "Each Submit_SM_RESP with ESME_ROK and message_ids; SMSC should either reassemble for delivery or forward segments to network. No protocol error; final delivered message is the reassembled content (if SMSC supports reassembly).",
+    "Steps": "1. Bind transmitter/transceiver. 2. Send segment 1 with UDHI and segment 2 with UDHI using same concat reference. 3. Validate Submit_SM_RESPs. 4. Monitor downstream delivery to handset or MO route to confirm reassembly if applicable.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC021_SubmitSM_SAR_TLVs_Multipart",
+    "Description": "Submit concatenated message using SAR TLVs (sar_msg_ref_num, sar_total_segments, sar_segment_seqnum) and verify server handling.",
+    "Category": "Core Operation / Protocol Adherence",
+    "Input": "Submit_SM PDUs with message_payload/short_message empty or containing segment plus optional TLVs: sar_msg_ref_num=0x1234, sar_total_segments=2, sar_segment_seqnum=1 (and 2 for second PDU).",
+    "ExpectedOutput": "Submit_SM_RESP for each segment with ESME_ROK; server acknowledges SAR TLVs; eventual delivery reassembled at network or forward as segments.",
+    "Steps": "1. Bind transmitter. 2. Send 1st Submit_SM with SAR TLVs. 3. Send 2nd Submit_SM with SAR TLVs. 4. Validate both Submit_SM_RESPs. 5. Validate downstream delivery behavior or server handling of SAR TLVs.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC022_MessagePayload_TLV_For_Large_Message",
+    "Description": "Submit a message larger than short_message capacity using message_payload optional parameter (TLV).",
+    "Category": "Core Operation / Protocol Adherence",
+    "Input": "Submit_SM PDU: sequence_id=22, short_message length=0, message_payload TLV present (tag=0x0424) with payload length=1000 bytes, data_coding appropriate for content.",
+    "ExpectedOutput": "Submit_SM_RESP PDU: sequence_id=22, command_status=ESME_ROK and message_id returned. Server must accept message_payload TLV and process/forward accordingly.",
+    "Steps": "1. Bind transmitter. 2. Build Submit_SM with message_payload TLV containing large payload. 3. Send and validate Submit_SM_RESP ESME_ROK. 4. Confirm server's downstream behavior for large payloads.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC023_ShortMessage_Length_MaxBoundary",
+    "Description": "Send a short_message exactly at the maximum allowed length (boundary test) and confirm acceptance.",
+    "Category": "Edge Case / Protocol Adherence",
+    "Input": "Submit_SM: short_message length = 254 bytes (use placeholder payload of 254 bytes).",
+    "ExpectedOutput": "Submit_SM_RESP: ESME_ROK. Server accepts 254-byte short_message in single Submit_SM if supported; otherwise indicates vendor maximum but must not crash or corrupt.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with short_message length exactly 254 bytes. 3. Validate Submit_SM_RESP is ESME_ROK. 4. If rejected, ensure proper error (ESME_RINVPARLEN or documented server-specific code) is returned.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC024_ShortMessage_TooLong_Error",
+    "Description": "Send short_message exceeding allowed length in the PDU body and validate server returns appropriate error or generic_nack.",
+    "Category": "Error Case / Protocol Adherence",
+    "Input": "Submit_SM: short_message length = 4096 bytes placed into short_message field (header indicates this length).",
+    "ExpectedOutput": "Server returns Generic_NACK or Submit_SM_RESP with non-zero command_status (e.g., ESME_RINVPARLEN or ESME_RINVCMDLEN). Alternatively the server may close the connection on malformed PDU. Test should detect correct error handling without crash.",
+    "Steps": "1. Bind transmitter. 2. Send malformed Submit_SM with excessive short_message length. 3. Validate server returns generic_nack or appropriate error code and/or closes connection gracefully. 4. Confirm server logs appropriate error (if accessible).",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC025_Encoding_UCS2_Unicode_Message",
+    "Description": "Submit a Unicode message using UCS2 encoding and verify server preserves data_coding and payload.",
+    "Category": "Core Operation / Edge Case",
+    "Input": "Submit_SM: data_coding=0x08 (UCS2), short_message contains UCS2-encoded 'こんにちは' sequence, registered_delivery=0x00.",
+    "ExpectedOutput": "Submit_SM_RESP: ESME_ROK and SMSC forwards message preserving data_coding; downstream delivery uses UCS2. If server transcodes, verify content and encoding conversion is correct.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with data_coding=UCS2 and Unicode payload. 3. Validate Submit_SM_RESP ESME_ROK. 4. If possible, monitor handset delivery to verify correct decoding.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC026_8bit_Binary_Payload",
+    "Description": "Send binary data (e.g., operator logos or WAP push) with 8-bit data_coding and verify server accepts and forwards payload intact.",
+    "Category": "Core Operation / Edge Case",
+    "Input": "Submit_SM: data_coding set to 8-bit/binary, short_message or message_payload contains raw binary (non-printable bytes).",
+    "ExpectedOutput": "Submit_SM_RESP: ESME_ROK. Server forwards binary payload unchanged; downstream system decodes based on data_coding.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with binary payload. 3. Validate Submit_SM_RESP ESME_ROK. 4. Verify downstream delivery preserves binary content.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC027_Empty_ShortMessage_Acceptance",
+    "Description": "Submit a PDU with a 0-length short_message (used by some vendors to indicate MO or special message) to check acceptance.",
+    "Category": "Edge Case",
+    "Input": "Submit_SM: short_message length=0, message_payload TLV absent, registered_delivery=0x00.",
+    "ExpectedOutput": "Submit_SM_RESP: ESME_ROK or server returns documented behavior (e.g., accept or reject with ESME_RINVPARLEN). Server must not crash.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with empty short_message. 3. Validate response. 4. Ensure no unexpected server behavior.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC028_Invalid_DataCoding_Value",
+    "Description": "Send a Submit_SM with an unsupported/invalid data_coding value and verify server treatment (reject or pass-through).",
+    "Category": "Edge Case / Protocol Adherence",
+    "Input": "Submit_SM: data_coding=0xFF (undefined), short_message contains sample payload.",
+    "ExpectedOutput": "Either Submit_SM_RESP ESME_ROK with server treating data_coding as vendor-specific/pass-through or Submit_SM_RESP with non-zero error code if server enforces strict validation. Document server behavior and ensure no crash.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with data_coding=0xFF. 3. Validate response and document server action.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC029_ShortMessage_And_MessagePayload_Conflict",
+    "Description": "Submit_SM containing both short_message and message_payload TLV simultaneously and validate server policy handling (spec compliance).",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "Submit_SM: short_message contains 'abc', message_payload TLV also present containing 'def'.",
+    "ExpectedOutput": "Server should either: 1) reject PDU with appropriate error (ESME_RINVPARLEN / ESME_RINVTLV) per implementation, or 2) follow vendor-specific precedence rules (document behavior). A compliant SMPP server should define and document behavior.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with both short_message and message_payload TLV. 3. Validate response code. 4. Ensure behavior is consistent and documented.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC030_CommandID_Response_Match",
+    "Description": "Verify that server responses use the correct response command_id for each request (e.g., Submit_SM_RESP for Submit_SM).",
+    "Category": "Protocol Adherence",
+    "Input": "Send Submit_SM with sequence_id=30.",
+    "ExpectedOutput": "Receive Submit_SM_RESP with command_id=submit_sm_resp and sequence_id=30. If another command_id is returned, it's a protocol violation.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM (seq=30). 3. Validate that incoming PDU has command_id Submit_SM_RESP and that it matches sequence_id 30.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC031_SequenceNumber_Echo",
+    "Description": "Server must echo the sequence_number from request to response; verify reflections are correct and unique.",
+    "Category": "Protocol Adherence",
+    "Input": "Send Submit_SM with sequence_id=12345.",
+    "ExpectedOutput": "Receive Submit_SM_RESP with sequence_id=12345. Responses with mismatched sequence_id should be treated as error.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with sequence_id=12345. 3. Verify Submit_SM_RESP sequence_id=12345. 4. Repeat for multiple concurrent requests to validate uniqueness and echo behavior.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC032_Malformed_PDU_GenericNack",
+    "Description": "Send a malformed/truncated PDU (incorrect command_length) and validate server returns Generic_NACK or closes connection as appropriate.",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "TCP payload with header declaring command_length longer than actual payload (truncated PDU) or corrupted header fields.",
+    "ExpectedOutput": "Generic_NACK PDU with non-zero command_status (error code) or server closes the connection. The server must not crash; error should be logged. If Generic_NACK not possible because header is unreadable, server may close connection.",
+    "Steps": "1. Establish TCP connection. 2. Send intentionally malformed/truncated PDU bytes. 3. Observe for Generic_NACK or connection termination. 4. Confirm server logs if accessible.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC033_Unknown_Optional_TLV_Ignored",
+    "Description": "Send a Submit_SM containing an unknown optional TLV tag; server should ignore unknown optional parameters and process the PDU.",
+    "Category": "Protocol Adherence",
+    "Input": "Submit_SM: standard fields + optional TLV with tag=0xFFFF (unknown), length=4, value=[0x01,0x02,0x03,0x04].",
+    "ExpectedOutput": "Submit_SM_RESP: ESME_ROK. Server ignores unknown optional TLV and processes message normally (as per SMPP spec).",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM containing unknown optional TLV. 3. Validate Submit_SM_RESP ESME_ROK and confirm unknown TLV didn't cause failure.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC034_Invalid_TLV_Length",
+    "Description": "Send a PDU with a known TLV tag but incorrect length field and expect the server to respond with an error (or generic_nack).",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "Submit_SM containing 'sar_msg_ref_num' TLV but with length=3 (should be 2) or other incorrect length mismatch between TLV header and payload.",
+    "ExpectedOutput": "Generic_NACK or Submit_SM_RESP with non-zero command_status (e.g., ESME_RINVPARLEN or ESME_RINVTLV). Server may also close connection depending on implementation.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with TLV length mismatch. 3. Validate server returns an appropriate error and doesn't crash. 4. Confirm server logs the invalid TLV.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC035_CommandLength_Header_Mismatch",
+    "Description": "Receive or send a PDU where the header's command_length does not match actual TCP payload length; validate server behavior.",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "PDU header declares command_length=200 but only 100 bytes follow (truncation) or vice versa.",
+    "ExpectedOutput": "Server should return Generic_NACK if it can detect the header, or close the connection on unrecoverable mismatch. No silent crash.",
+    "Steps": "1. Connect. 2. Send mismatched PDU. 3. Validate server returns Generic_NACK or closes connection. 4. Check logs for error classification.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC036_PDU_Before_Bind_Reject",
+    "Description": "Send a transactional PDU (Submit_SM) before successful bind and expect an error (ESME_RINVBNDSTS).",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "Submit_SM PDU: sequence_id=36 sent on an unauthenticated/unbound connection.",
+    "ExpectedOutput": "Submit_SM_RESP (or Generic_NACK) with command_status=ESME_RINVBNDSTS (invalid bind state) or connection closed according to vendor policy.",
+    "Steps": "1. Open TCP connection but do not bind. 2. Send Submit_SM. 3. Validate server rejects with ESME_RINVBNDSTS or similar behavior.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC037_EnquireLink_And_Response",
+    "Description": "Send Enquire_Link and verify Enquire_Link_RESP is returned promptly to keep connection alive.",
+    "Category": "Protocol Adherence / Session Keepalive",
+    "Input": "Enquire_Link PDU: sequence_id=37.",
+    "ExpectedOutput": "Enquire_Link_RESP PDU: sequence_id=37, command_status=ESME_ROK. Response should be timely (within configured keepalive interval).",
+    "Steps": "1. Bind (any bind). 2. Send Enquire_Link. 3. Validate Enquire_Link_RESP with matching sequence_id and ESME_ROK. 4. Measure latency to ensure it meets SLA.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC038_EnquireLink_NoResponse_Timeout",
+    "Description": "Verify server makes decisions if Enquire_Link_REQUEST is sent by server and client does not respond (client behavior simulated), or vice versa verify server closes unresponsive session after missing Enquire_Link_RESP.",
+    "Category": "Session Keepalive / Error Case",
+    "Input": "Enquire_Link sent by client with no Enquire_Link_RESP returned (simulate network drop or server not responding).",
+    "ExpectedOutput": "If server doesn't receive Enquire_Link_RESP in configured timeout, it may close connection. For client-initiated Enquire_Link no response, client should treat session as dead. Document and validate server/client timeout behavior.",
+    "Steps": "1. Send Enquire_Link and block any incoming response artificially. 2. Observe behavior until configured timeout. 3. Validate session close or expected fallback (reconnect/rebind).",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC040_InvalidDestinationAddress_Format",
+    "Description": "Submit a message with an invalid destination address format and expect an error (ESME_RINVDSTADR).",
+    "Category": "Error Case",
+    "Input": "Submit_SM: dest_addr='INVALID-ALPHA', dest_addr_ton set to numeric type, dest_addr_npi=0x01.",
+    "ExpectedOutput": "Submit_SM_RESP with command_status=ESME_RINVDSTADR (invalid destination address) or vendor-specific validation error; message not accepted for delivery.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with invalid dest_addr. 3. Validate Submit_SM_RESP contains invalid destination error and message not forwarded.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC041_InvalidSourceAddress_Format",
+    "Description": "Submit a message with an invalid or disallowed source_addr and expect server to reject or normalize according to policy.",
+    "Category": "Error Case",
+    "Input": "Submit_SM: source_addr contains invalid characters or exceeds allowed length, e.g., source_addr='TOO_LONG_SOURCE_NAME_EXCEEDING_MAX'.",
+    "ExpectedOutput": "Submit_SM_RESP with non-zero command_status (ESME_RINVSRCADR or ESME_RINVPARLEN) or server accepts and truncates based on documented behavior.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with invalid source_addr. 3. Verify server response and that server behavior is documented (reject/truncate).",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC042_Exceed_Throttling_Window_And_Expect_RateLimit",
+    "Description": "Generate traffic higher than allowed TPS or outstanding window and verify server returns ESME_RTHROTTLED or enforces throttling policy.",
+    "Category": "Performance / Error Case",
+    "Input": "Burst Submit_SM PDUs to exceed server configured TPS or allowed outstanding window (e.g., send 1000 TPS when server limit is 100 TPS).",
+    "ExpectedOutput": "Server returns Submit_SM_RESP with command_status=ESME_RTHROTTLED or generic_nack for excess requests; server should remain stable and throttle according to policy.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM at increasing TPS up to target (e.g., 1000 TPS). 3. Monitor Submit_SM_RESP codes. 4. Validate server returns ESME_RTHROTTLED or documented throttle behavior and logs throttling event.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC043_Duplicate_SequenceNumber_Handling",
+    "Description": "Send two different PDUs with the same sequence_number while the first is outstanding and observe server reaction to duplicate sequence IDs.",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "Submit_SM #1: sequence_id=200 (outstanding). Submit_SM #2: sequence_id=200 (duplicate) before receiving response for #1.",
+    "ExpectedOutput": "Server should detect duplicate sequence_id and respond with error for second request (e.g., Generic_NACK or ESME_RINVSEQ) or handle as vendor-specific behavior. Should not misassociate responses.",
+    "Steps": "1. Bind transmitter. 2. Send first Submit_SM with sequence_id=200. 3. Immediately send second Submit_SM with same sequence_id. 4. Verify server response to second PDU indicates duplication error and first PDU still receives appropriate response.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC044_Unsupported_CommandID",
+    "Description": "Send a PDU with an invalid/unsupported command_id and expect Generic_NACK with ESME_RINVCMDID.",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "PDU header with command_id set to 0xDEAD (unknown) and well-formed header body.",
+    "ExpectedOutput": "Generic_NACK PDU with command_status=ESME_RINVCMDID (invalid command id) or server closes connection. No crash.",
+    "Steps": "1. Establish connection and bind. 2. Send a PDU with an unsupported command_id. 3. Validate Generic_NACK or documented error response. 4. Check server logs for error classification.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC045_Response_With_Wrong_CommandStatus",
+    "Description": "Verify that server returns appropriate command_status values for error cases and does not use ambiguous codes. Example: invalid password returns ESME_RINVPASWD.",
+    "Category": "Protocol Adherence",
+    "Input": "Bind_Transmitter attempt with incorrect password (same as TC004).",
+    "ExpectedOutput": "Bind_Transmitter_RESP with command_status=ESME_RINVPASWD. Server should not return generic or unrelated code for authentication failure.",
+    "Steps": "1. Connect. 2. Attempt bind with wrong password. 3. Validate Binding RESP returns the specific authentication failure code. 4. Document mapping of errors to codes for future automated checks.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC050_Throughput_LowRate_100TPS",
+    "Description": "Verify system can sustain 100 TPS Submit_SM for an extended period and maintain latency and error rate thresholds.",
+    "Category": "Performance",
+    "Input": "Continuous Submit_SM PDUs at 100 TPS for 10 minutes, each with unique sequence_id and valid payloads.",
+    "ExpectedOutput": "All Submit_SM_RESP received with ESME_ROK, server CPU/memory within acceptable ranges, 99th percentile latency under SLA (documented), no message loss.",
+    "Steps": "1. Prepare a load generator configured for 100 TPS. 2. Bind and send messages for 10 minutes. 3. Record Submit_SM_RESP success rate, latency, CPU/memory, and network metrics. 4. Validate absence of errors and adherence to SLA.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC051_Throughput_HighRate_1000TPS",
+    "Description": "Sustain 1000 TPS Submit_SM to validate server throughput and stability under heavy load.",
+    "Category": "Performance / Stress",
+    "Input": "Continuous Submit_SM PDUs at 1000 TPS for 5 minutes, unique sequence_id per message.",
+    "ExpectedOutput": "Server processes the majority of messages with Submit_SM_RESP ESME_ROK or returns ESME_RTHROTTLED for exceeding load; server remains stable with controlled resource usage; no crashes.",
+    "Steps": "1. Set up high-throughput load generator. 2. Bind and send 1000 TPS for 5 minutes. 3. Monitor success/error rates, latencies, and resource metrics. 4. Verify behavior is within documented thresholds.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC052_Stress_HighTPS_5000TPS_5min",
+    "Description": "Aggressive stress test to determine maximum sustainable TPS and observe throttling or failure modes.",
+    "Category": "Performance / Stress",
+    "Input": "Continuous Submit_SM at 5000 TPS for 5 minutes, each with a valid payload and unique sequence_id.",
+    "ExpectedOutput": "Server either sustains load with acceptable latency or returns explicit throttling/errors (ESME_RTHROTTLED) while remaining responsive; no uncontrolled resource exhaustion or crashes.",
+    "Steps": "1. Configure distributed load generator to produce 5000 TPS. 2. Bind as transmitter and run for 5 minutes. 3. Collect metrics and error codes. 4. Validate server behavior against SLAs and safe failure modes.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC053_Window_Size_Exhaustion",
+    "Description": "Test server behavior when number of outstanding (unacknowledged) requests exceeds configured window size.",
+    "Category": "Performance / Protocol Adherence",
+    "Input": "Rapidly send many Submit_SM requests without waiting for responses to exceed configured outstanding window (e.g., send 500 while window=50).",
+    "ExpectedOutput": "Server should enforce windowing: respond with errors (ESME_RTHROTTLED) or close connection if policy dictates, but must not mis-associate responses. Documented limiting behavior expected.",
+    "Steps": "1. Bind transmitter. 2. Configure client to send many concurrent Submit_SM without waiting. 3. Observe server replies and error codes. 4. Verify no PDU-response mismatch and server remains stable.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC054_Peak_Simultaneous_Binds",
+    "Description": "Open maximum expected number of simultaneous binds (connections) and validate server connection handling and resource usage.",
+    "Category": "Performance / Stress",
+    "Input": "Open N simultaneous connections and successful binds (N equals expected peak; e.g., 500 concurrent binds).",
+    "ExpectedOutput": "Server accepts binds up to documented limits and returns proper errors when limit reached (e.g., TCP connection refused or Bind_RESP with resource error). Server remains stable.",
+    "Steps": "1. Use a connection generator to open N binds. 2. Monitor server response success rate and resource metrics. 3. Validate server returns clear error when maximum connections exceeded.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC060_TLS_Handshake_ValidCert",
+    "Description": "Establish SMPP over TLS with valid server certificate (and client cert if required) and verify encrypted session and PDU exchange.",
+    "Category": "Security",
+    "Input": "TCP/TLS connect to SMPP-over-TLS port (e.g., 2776), valid server certificate chain trusted by client; optional client certificate if server requires mutual TLS.",
+    "ExpectedOutput": "TLS handshake completes successfully; subsequent Bind and Submit operations occur over encrypted channel; server accepts bind when TLS configuration correct.",
+    "Steps": "1. Configure client TLS truststore and optional client cert. 2. Connect to server TLS port and perform TLS handshake. 3. Perform Bind and a sample Submit_SM to verify functionality. 4. Verify encryption with certificate details and correct server identity.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC061_TLS_Handshake_InvalidClientCert",
+    "Description": "Attempt SMPP over TLS with an invalid or untrusted client certificate when server requires client authentication.",
+    "Category": "Security / Error Case",
+    "Input": "TLS connect presenting an invalid client certificate or expired cert to a server that enforces client certificate authentication.",
+    "ExpectedOutput": "TLS handshake fails or server closes connection; no Bind allowed. Server logs authentication failure. If server accepts, it must be documented behavior (but should reject).",
+    "Steps": "1. Configure client to present invalid cert. 2. Attempt TLS connection and handshake. 3. Validate that connection is rejected and no SMPP PDUs accepted.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC062_IP_Restriction_Connection_Refusal",
+    "Description": "Attempt connection and bind from an unauthorized IP address and verify server rejects or blocks the connection.",
+    "Category": "Security",
+    "Input": "TCP connect from IP not in SMSC allowlist and attempt Bind_Transmitter.",
+    "ExpectedOutput": "Connection refused or Bind_Transmitter_RESP with authentication/refusal error; server enforces IP-based access controls and logs attempt.",
+    "Steps": "1. From a test host with disallowed IP, attempt TCP connect and bind. 2. Validate server denies connection or bind. 3. Check server logs for blocked event if accessible.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC063_Max_Login_Attempts_Account_Lock",
+    "Description": "Perform repeated failed bind attempts and verify account lockout or temporary block behavior (security policy).",
+    "Category": "Security / Error Case",
+    "Input": "Send repeated Bind_Transmitter attempts with wrong password more than allowed threshold within configured timeframe.",
+    "ExpectedOutput": "Initial attempts receive ESME_RINVPASWD; after threshold, server rejects further binds for configured lockout period with specific error or connection drop. Document timing and reset conditions.",
+    "Steps": "1. Attempt N wrong binds in a row (N = threshold). 2. Confirm responses for each attempt. 3. After threshold, attempt bind again and validate lockout behavior. 4. Attempt bind after lockout expires to confirm unlocking behavior.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC064_Authorization_TransmitterCannotReceiveDeliverSM",
+    "Description": "Bind as transmitter-only and verify server does not send Deliver_SM (including DLRs) to this session (as receivers required).",
+    "Category": "Security / Protocol Adherence",
+    "Input": "Bind_Transmitter only (no receiver). Submit_SM with registered_delivery=1 from same system_id (or another) and observe if server attempts to deliver DLR to transmitter-only session.",
+    "ExpectedOutput": "No Deliver_SM should be received on transmitter-only session. Server should deliver DLRs to configured receiver session or queue for later if supported. If server sends DLR to transmitter, it's non-compliant behavior.",
+    "Steps": "1. Bind as transmitter. 2. Submit an MT requiring DLR. 3. Wait for DLR period and assert that no Deliver_SM arrives on transmitter-only socket. 4. Document server behavior for DLR routing.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC065_Invalid_SystemID_On_Bind",
+    "Description": "Attempt to bind with a system_id that the SMSC does not recognize and verify server rejects or handles per policy.",
+    "Category": "Security / Error Case",
+    "Input": "Bind_Transmitter: system_id='unknown_system', password='anything'.",
+    "ExpectedOutput": "Bind_Transmitter_RESP with non-zero command_status (authentication failure or unknown system), e.g., ESME_RINVPASWD or vendor-specific code.",
+    "Steps": "1. Connect. 2. Send Bind_Transmitter with unknown system_id. 3. Validate response error and absence of bind state.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC070_Network_Disconnect_Reconnect_Rebind",
+    "Description": "Simulate a network drop during active session and verify client reconnect and rebind behavior, and server behavior regarding in-flight messages.",
+    "Category": "Network Resilience",
+    "Input": "Active Submit_SM sequences in-flight; simulate abrupt TCP connection drop (RST) and then reconnect and rebind using the same credentials.",
+    "ExpectedOutput": "On reconnect, bind must succeed (subject to server policy). In-flight messages may be lost or duplicated depending on server implementation; server should not produce undefined behavior. Validate that duplicated Submit_SM either rejected or handled gracefully (idempotent behavior or duplicate detection).",
+    "Steps": "1. Bind and send several Submit_SM but do not wait for responses for some. 2. Force TCP connection drop. 3. Reconnect and rebind. 4. Resend messages as per client policy and validate server handles duplicates or reprocessing according to documented behavior.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC071_InFlight_Messages_After_Server_Restart",
+    "Description": "Verify behavior of messages that were accepted by server before a restart (persistency) — are they preserved, lost, or reprocessed?",
+    "Category": "Network Resilience / Reliability",
+    "Input": "Submit_SM PDUs accepted (Submit_SM_RESP returned) just before server restart occurs. Then restart the SMSC process/service.",
+    "ExpectedOutput": "Documented server behavior: either queued messages persist (delivered later), or messages are lost; server must not corrupt state. Test confirms actual behavior vs expected SLA (persistence guarantees).",
+    "Steps": "1. Submit messages and confirm Submit_SM_RESPs. 2. Restart SMSC process. 3. Observe whether those messages are delivered after restart or lost. 4. Validate server logs and persistence settings.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC072_Graceful_Shutdown_Server_Unbind",
+    "Description": "When server asks for Unbind or shuts down, verify that it signals ESMEs properly and allows graceful session tear-down.",
+    "Category": "Network Resilience / Session Management",
+    "Input": "Server initiates Unbind or announces shutdown by sending an Unbind to connected ESME. Alternatively simulate server sending network-level shutdown signals.",
+    "ExpectedOutput": "ESME should respond with Unbind_RESP and server should close connection politely. No in-flight messages should be lost unexpectedly without documented behavior.",
+    "Steps": "1. Have server perform graceful shutdown routine. 2. Observe Unbind sent to ESME (if applicable). 3. Validate ESME sends Unbind_RESP and connection is closed. 4. Confirm message processing state.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC073_Keepalive_And_AutoReconnect",
+    "Description": "Verify that client and server keepalive via Enquire_Link prevents unexpected disconnects and client auto-reconnect works when keepalive fails.",
+    "Category": "Network Resilience / Session Management",
+    "Input": "Idle session with periodic Enquire_Link interval configured; simulate keepalive failure (block responses) and observe reconnect/cleanup.",
+    "ExpectedOutput": "If Enquire_Link_RESP not received in timeout, session is closed by either side and client should attempt reconnect/rebind per policy. No silent resource leak on server.",
+    "Steps": "1. Bind and enter idle state. 2. Exchange Enquire_Link periodically and measure. 3. Stop responding to Enquire_Link to simulate failure. 4. Validate cleanup and reconnect behavior.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC080_DeliveryReceipt_Different_Statuses",
+    "Description": "Verify server can generate and deliver DLRs for different final statuses (DELIVRD, EXPIRED, UNDELIVERABLE, REJECTED) and format is consistent.",
+    "Category": "Message Flow / Core Operation",
+    "Input": "Submit_SM with registered_delivery=1; simulate downstream network conditions to produce different final statuses for messages.",
+    "ExpectedOutput": "Deliver_SM PDUs with esm_class indicating delivery receipt and short_message containing stat fields reflecting final status (e.g., stat:DELIVRD, stat:EXPIRED). Deliver_SM_RESP with ESME_ROK required.",
+    "Steps": "1. Bind transmitter and receiver/transceiver. 2. Submit messages and simulate conditions causing different final statuses. 3. Validate DLRs arrive with correct stat codes and message_id mapping. 4. Confirm ESME responds with Deliver_SM_RESP ESME_ROK.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC081_DeliveryReceipt_Invalid_Format_Tolerant",
+    "Description": "Deliver_SM contains a malformed DLR format; verify ESME and server handle gracefully without crashing and return Deliver_SM_RESP.",
+    "Category": "Error Case / Robustness",
+    "Input": "Deliver_SM: esm_class=delivery_receipt, short_message='malformed-receipt-without-expected-fields'.",
+    "ExpectedOutput": "Deliver_SM_RESP: ESME_ROK. ESME should attempt to parse and, failing that, log the malformed DLR without causing protocol-level error. Server must not resend DLR unnecessarily.",
+    "Steps": "1. Bind receiver. 2. Have SMSC send malformed DLR. 3. Verify ESME responds with Deliver_SM_RESP and logs the parsing error. 4. Confirm no repeated re-delivery loops occur.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC082_DeliveryReceipt_In_MessagePayload_TLV",
+    "Description": "DLR sent in message_payload TLV instead of short_message; verify ESME can extract and acknowledge it.",
+    "Category": "Message Flow / Protocol Adherence",
+    "Input": "Deliver_SM: short_message length=0, message_payload TLV contains delivery receipt text, esm_class indicates delivery_receipt.",
+    "ExpectedOutput": "Deliver_SM_RESP: ESME_ROK and ESME extracts DLR fields from message_payload TLV correctly. Server treats the DLR as delivered.",
+    "Steps": "1. Bind receiver. 2. Simulate Deliver_SM with message_payload containing DLR. 3. Validate Deliver_SM_RESP and parsing by ESME.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC083_DeliveryReceipt_With_NonASCII",
+    "Description": "DLR or message payload contains non-ASCII characters (UCS2) and must be preserved and parsed correctly.",
+    "Category": "Message Flow / Edge Case",
+    "Input": "Deliver_SM: data_coding=UCS2, esm_class=delivery_receipt, short_message contains UCS2 text in message body or receipt.",
+    "ExpectedOutput": "Deliver_SM_RESP: ESME_ROK. ESME preserves and decodes the UCS2 content correctly and maps receipt fields. No data corruption should occur.",
+    "Steps": "1. Bind receiver. 2. Send Deliver_SM with UCS2-coded DLR or payload. 3. Validate ESME can decode and respond properly.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC090_AddressRange_Wildcarding_Bind",
+    "Description": "Bind using address_range parameter to accept only certain destination addresses; verify server honors address_range for Deliver_SM or MO routing.",
+    "Category": "Protocol Adherence / Edge Case",
+    "Input": "Bind_Receiver: address_range='44%' (example) then server attempts to deliver MO with destination not in range and one in range.",
+    "ExpectedOutput": "Server delivers only those messages matching the bound address_range to this session. Others are not delivered to this ESME (or are routed to appropriate sessions).",
+    "Steps": "1. Bind receiver with address_range pattern. 2. Send/Simulate incoming MO messages with various destinations. 3. Validate only matching messages are delivered to this session.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC091_PriorityFlag_Respected",
+    "Description": "Submit messages with varying priority_flag values and validate server treatment when under load (higher priority messages are forwarded first per server policy).",
+    "Category": "Core Operation / Performance",
+    "Input": "Multiple Submit_SM PDUs with priority_flag set to 0 (low), 1, 2, 3 (high) while SMSC is under constrained conditions.",
+    "ExpectedOutput": "Server schedules and delivers messages respecting priority_flag and documented priority policy. High priority messages should see lower queueing latency under congestion.",
+    "Steps": "1. Bind transmitter. 2. Send mixed-priority messages during high load. 3. Measure end-to-end latency by priority. 4. Validate server honors priority_flag per documentation.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC092_TON_NPI_Combination_Validation",
+    "Description": "Submit messages with combinations of source/destination TON/NPI values (including unusual values) to validate server validation and routing.",
+    "Category": "Edge Case / Protocol Adherence",
+    "Input": "Submit_SM with source_addr_ton and dest_addr_ton set to unusual or boundary values (e.g., TON=5, NPI=0x09) and well-formed addresses.",
+    "ExpectedOutput": "Server either accepts and routes based on TON/NPI or returns descriptive error for unsupported values. No protocol crash should occur.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with various TON/NPI combos. 3. Validate server responses and routing behavior documented by vendor.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC093_Multiple_TLVs_Order_Independence",
+    "Description": "Send Submit_SM with multiple optional TLVs in different orders and validate server processes them independent of order.",
+    "Category": "Protocol Adherence",
+    "Input": "Submit_SM containing TLVs: sar_msg_ref_num, source_port, dest_port in order A->B->C and then in order C->A->B in a separate run.",
+    "ExpectedOutput": "Submit_SM_RESP ESME_ROK in both runs and server processes TLVs equivalently regardless of order.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with TLVs in one order and validate response and behavior. 3. Repeat with identical TLVs in different order and compare results.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC094_Duplicate_TLV_Tags",
+    "Description": "Send a PDU containing duplicate TLV tags and verify server behavior (reject, accept first, accept last) per server documentation.",
+    "Category": "Protocol Adherence / Error Case",
+    "Input": "Submit_SM with two TLVs of the same tag (e.g., dest_addr_subunit) with different values.",
+    "ExpectedOutput": "Either server returns error (ESME_RINVTLV / ESME_RINVPARLEN) or applies documented precedence (e.g., uses first occurrence). Behavior must be deterministic and documented.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with duplicate TLV tags. 3. Validate server response and record which TLV value is used or whether an error is thrown.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC095_UnsupportedOptional_Param_Ignored",
+    "Description": "Confirm server ignores optional TLVs it does not support rather than rejecting the PDU.",
+    "Category": "Protocol Adherence",
+    "Input": "Submit_SM with optional TLV tags that server claims not to support (documented unsupported features).",
+    "ExpectedOutput": "Submit_SM_RESP ESME_ROK; server ignores unsupported optional parameters but processes the rest of the PDU. No error is returned specifically for unsupported TLV.",
+    "Steps": "1. Bind transmitter. 2. Send Submit_SM with unsupported optional TLVs. 3. Verify Submit_SM_RESP ESME_ROK and no adverse side effects.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC096_Administrative_Throttle_Notification",
+    "Description": "Verify server signals throttling via explicit error codes and optionally via management/monitoring APIs when administrative throttle limits are applied.",
+    "Category": "Performance / Operational",
+    "Input": "Generate traffic to exceed admin throttle thresholds and check for ESME_RTHROTTLED responses and server-side alerts/metrics.",
+    "ExpectedOutput": "Submit_SM_RESPs with ESME_RTHROTTLED for requests beyond policy; server metrics reflect throttle event; documentation explains corrective actions.",
+    "Steps": "1. Generate traffic to exceed throttle. 2. Validate error codes on responses. 3. Query server management API or logs to confirm throttle events and metrics.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC097_Monitoring_And_Logging_Verification",
+    "Description": "Confirm that key SMPP events (bind, unbind, submit, delivery, errors) are logged with adequate detail (PDU type, sequence id, timestamp, system_id).",
+    "Category": "Operational / Compliance",
+    "Input": "Execute representative actions: successful bind, failed bind, submit_sm, deliver_sm, generic_nack, and server error conditions.",
+    "ExpectedOutput": "Server logs contain entries for each action including timestamps, command_id, command_status, sequence_id, and system_id where applicable. Logs are queryable for audit/compliance.",
+    "Steps": "1. Perform the above representative actions. 2. Access server logs (via API or file) and verify entries exist and contain required details. 3. Validate retention policy if relevant.",
+    "Status": ""
+  },
+  {
+    "TestCase": "TC098_Automation_SmokeTest_Sequence",
+    "Description": "End-to-end smoke test automation sequence including bind, submit, DLR reception, query, cancel, replace, and unbind to validate basic end-to-end flows.",
+    "Category": "Core Operation / Automation",
+    "Input": "Automated script executes: Bind_Transceiver -> Submit_SM -> wait for Submit_SM_RESP -> (if registered_delivery) wait Deliver_SM -> Query_SM -> Cancel_SM/Replace_SM -> Unbind.",
+    "ExpectedOutput": "All steps respond with ESME_ROK or appropriate documented states. Automation reports pass/fail per step and aggregated success metrics.",
+    "Steps": "1. Implement automation harness that wraps SMPP client. 2. Run the smoke sequence. 3. Validate each response and aggregate test results and logs for failures.",
+    "Status": ""
+  }
+]

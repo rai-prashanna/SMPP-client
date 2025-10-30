@@ -17,6 +17,8 @@ import (
 	"github.com/linxGnu/gosmpp/pdu"
 )
 
+var requestTracker = make(map[int32]*pdu.SubmitSM) // Track request based on sequence_number
+
 func main() {
 	var wg sync.WaitGroup
 
@@ -32,6 +34,14 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	server := os.Getenv("SMPP_HOST") + ":" + os.Getenv("SMPP_PORT")
 	systemId := os.Getenv("SYSTEM_ID")
 	password := os.Getenv("PASSWORD")
+
+	testCases, parserError := parseFile("test-case.jsonl")
+
+	if parserError != nil {
+		fmt.Println("Rebinding but error:", parserError)
+		//fmt.Fprintf(os.Stderr, "error parsing file: %v\n", parserError)
+		os.Exit(1)
+	}
 
 	auth := gosmpp.Auth{
 		SMSC:       server,
@@ -82,15 +92,22 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	}()
 
 	// sending SMS(s)
-	for i := 0; i < 2; i++ {
+	for i, _ := range testCases {
+		fmt.Printf("Test #%d:\n", i+1)
+		//fmt.Printf("Test #%s:\n", testCase)
 		if err = trans.Transceiver().Submit(newSubmitSM()); err != nil {
 			fmt.Println(err)
 		}
 		time.Sleep(time.Second)
 	}
-}
 
-var requestTracker = make(map[int32]*pdu.SubmitSM) // Track request based on sequence_number
+	//for i := 0; i < len(testCases); i++ {
+	//	if err = trans.Transceiver().Submit(newSubmitSM()); err != nil {
+	//		fmt.Println(err)
+	//	}
+	//	time.Sleep(time.Second)
+	//}
+}
 
 func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 	concatenated := map[uint8][]string{}
@@ -107,8 +124,6 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 			} else {
 				log.Printf("No matching SubmitSM request for SequenceNumber %+v\n", responsePdu)
 			}
-			//fmt.Printf("SubmitSMResp:%+v\n", response_pdu)
-
 		case *pdu.GenericNack:
 			fmt.Println("GenericNack Received")
 
@@ -121,8 +136,6 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 		case *pdu.DeliverSM:
 			fmt.Printf("DeliverSM:%+v\n", responsePdu)
 			log.Println(responsePdu.Message.GetMessage())
-
-			// region concatenated sms (sample code)
 			message, err := responsePdu.Message.GetMessage()
 			if err != nil {
 				log.Fatal(err)

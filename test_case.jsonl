@@ -1,0 +1,100 @@
+[
+  {
+    "Test ID": "TC-SUBMIT-001",
+    "Description": "Positive test — valid submit_sm with plain text (GSM 7-bit) short_message; SMSC accepts message and returns success (message_id).",
+    "Preconditions": [
+      "TCP connection to SMSC established.",
+      "SMPP session bound as transceiver or transmitter (bind_transmitter / bind_transceiver) and bind_resp returned command_status = ESME_ROK.",
+      "Client is authorized to submit messages using the chosen source address (alphanumeric allowed)."
+    ],
+    "Input (submit_sm PDU fields)": {
+      "command_id": "submit_sm",
+      "sequence_number": 42,
+      "service_type": "",
+      "source_addr_ton": 5,
+      "source_addr_npi": 0,
+      "source_addr": "ACME",
+      "dest_addr_ton": 1,
+      "dest_addr_npi": 1,
+      "destination_addr": "447700900000",
+      "esm_class": 0,
+      "protocol_id": 0,
+      "priority_flag": 0,
+      "schedule_delivery_time": "",
+      "validity_period": "",
+      "registered_delivery": 0,
+      "replace_if_present_flag": 0,
+      "data_coding": 0,
+      "sm_default_msg_id": 0,
+      "sm_length": 11,
+      "short_message": "Hello World"
+    },
+    "Test Steps": [
+      "1) Ensure bind_transmitter or bind_transceiver was successful (received bind_resp with command_status = success).",
+      "2) Construct submit_sm PDU using the Input fields above and send to SMSC.",
+      "3) Wait for submit_sm_resp with matching sequence_number (42).",
+      "4) Verify response and optionally check SMSC queue/admin interface to confirm message was accepted for delivery."
+    ],
+    "Expected Outcome": [
+      "1) submit_sm_resp arrives with the same sequence_number (42).",
+      "2) command_status == 0 (ESME_ROK / success).",
+      "3) A non-empty message_id is present in submit_sm_resp (e.g., \"123456789\").",
+      "4) The message is accepted by the SMSC and enqueued for delivery. Connection remains bound (no unexpected disconnect)."
+    ],
+    "Postconditions": [
+      "A message_id is returned and the SMSC has the message queued for delivery.",
+      "Client remains bound; no state changes other than message submission."
+    ],
+    "Assumptions / Notes": [
+      "data_coding=0 implies GSM 7-bit; sm_length is number of octets used by short_message (11 in this example).",
+      "Some SMSCs may alter allowed TON/NPI or restrict alphanumeric sender IDs; if so adjust source_addr_ton/source_addr accordingly."
+    ]
+  },
+  {
+    "Test ID": "TC-SUBMIT-002",
+    "Description": "Negative test — submit_sm with invalid destination address format (alpha char included when TON indicates numeric). Expect SMSC rejects message and returns non-zero command_status.",
+    "Preconditions": [
+      "TCP connection to SMSC established.",
+      "SMPP session bound as transceiver or transmitter and bind_resp returned command_status = ESME_ROK."
+    ],
+    "Input (submit_sm PDU fields)": {
+      "command_id": "submit_sm",
+      "sequence_number": 43,
+      "service_type": "",
+      "source_addr_ton": 5,
+      "source_addr_npi": 0,
+      "source_addr": "ACME",
+      "dest_addr_ton": 1,
+      "dest_addr_npi": 1,
+      "destination_addr": "4477A090000",  /* contains letter 'A' making format invalid for numeric TON */
+      "esm_class": 0,
+      "protocol_id": 0,
+      "priority_flag": 0,
+      "schedule_delivery_time": "",
+      "validity_period": "",
+      "registered_delivery": 0,
+      "replace_if_present_flag": 0,
+      "data_coding": 0,
+      "sm_default_msg_id": 0,
+      "sm_length": 11,
+      "short_message": "Hello World"
+    },
+    "Test Steps": [
+      "1) Ensure bind_transmitter or bind_transceiver was successful (received bind_resp with command_status = success).",
+      "2) Construct submit_sm PDU using the Input fields above and send to SMSC.",
+      "3) Wait for submit_sm_resp with matching sequence_number (43).",
+      "4) Verify that the submit_sm_resp indicates failure and that the SMSC did not enqueue the message."
+    ],
+    "Expected Outcome": [
+      "1) submit_sm_resp arrives with the same sequence_number (43).",
+      "2) command_status != 0 (non-zero). Typical expected error: ESME_RINVDSTADR (invalid destination address) or a vendor-specific rejection code.",
+      "3) No message_id is returned (empty or zero-length).",
+      "4) Message is not enqueued for delivery; server logs should show invalid destination/validation error.",
+      "5) The SMPP session remains bound (SMSC should not disconnect for a malformed destination address)."
+    ],
+    "Postconditions": [
+      "Submission is rejected by SMSC and client receives non-zero status; no message delivery attempt is made."
+    ],
+    "Assumptions / Notes": [
+      "SMSC validation rules may vary; some SMSCs try to sanitize/accept borderline addresses — test should assert either the precise error or that the message was not accepted.",
+      "If the SMSC returns a generic submit failure (e.g., ESME_RSUBMITFAIL) rather than a specific,
