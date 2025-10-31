@@ -34,9 +34,12 @@ type ExpectedOutput struct {
 
 // TestCase ties an input PDU with its expected output.
 type TestCase struct {
+	TestCaseId     int            `json:"test_case_id"`
 	InputPdu       InputPDU       `json:"input_pdu"`
 	ExpectedOutput ExpectedOutput `json:"expected_output_pdu"`
 }
+
+//"test_case_id": 1,
 
 // ValidationResult holds computed validation details for each test case.
 type ValidationResult struct {

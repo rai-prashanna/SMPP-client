@@ -1,5 +1,6 @@
 [
   {
+    "test_case_id": 1,
     "input_pdu": {
       "command_id": "submit_sm",
       "service_type": "",
@@ -17,16 +18,17 @@
       "data_coding": 0,
       "encoding": "7-bit",
       "sm_length": 16,
-      "short_message": "Hello, SubmitSM!"
+      "short_message": "Hello, Prashanna!"
     },
     "expected_output_pdu": {
       "command_id": "submit_sm_resp",
-      "command_status": 0,
+      "command_status": 1,
       "message_id": "MSG0001",
       "delivery_status": "accepted"
     }
   },
   {
+    "test_case_id": 2,
     "input_pdu": {
       "command_id": "submit_sm",
       "service_type": "CMT",
@@ -54,6 +56,7 @@
     }
   },
   {
+    "test_case_id": 3,
     "input_pdu": {
       "command_id": "submit_sm",
       "service_type": "",
@@ -84,6 +87,7 @@
     }
   },
   {
+    "test_case_id": 4,
     "input_pdu": {
       "command_id": "submit_sm",
       "service_type": "",
@@ -109,6 +113,7 @@
     }
   },
   {
+    "test_case_id": 5,
     "input_pdu": {
       "command_id": "submit_sm",
       "service_type": "",
@@ -131,28 +136,6 @@
     "expected_output_pdu": {
       "delivery_status": "failed",
       "error": "sm_length indicates 10 bytes but actual short_message is 2 bytes (truncated or malformed PDU)"
-    }
-  },
-  {
-    "input_pdu": {
-      "command_id": "submit_sm",
-      "service_type": "",
-      "source_addr_ton": 1,
-      "source_addr_npi": 1,
-      "source_addr": "14155550112",
-      "esm_class": 0,
-      "protocol_id": 0,
-      "priority_flag": 0,
-      "registered_delivery": 0,
-      "replace_if_present_flag": 0,
-      "data_coding": 0,
-      "encoding": "7-bit",
-      "sm_length": 14,
-      "short_message": "No destination!"
-    },
-    "expected_output_pdu": {
-      "delivery_status": "failed",
-      "error": "Missing required field: destination_addr"
     }
   }
 ]

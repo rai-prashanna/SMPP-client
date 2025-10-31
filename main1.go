@@ -19,8 +19,12 @@ import (
 )
 
 var requestTracker = make(map[int32]*pdu.SubmitSM) // Track request based on sequence_number
+var testCaseTracker = make(map[int32]*TestCase)    // Track PDU test case based on sequence_number
+
+var testCases []TestCase // replace with actual type
 
 func main() {
+
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -31,12 +35,6 @@ func main() {
 }
 
 func sendingAndReceiveSMS(wg *sync.WaitGroup) {
-	defer wg.Done()
-	_ = godotenv.Load() // ignore error; .env is optional
-	server := os.Getenv("SMPP_HOST") + ":" + os.Getenv("SMPP_PORT")
-	systemId := os.Getenv("SYSTEM_ID")
-	password := os.Getenv("PASSWORD")
-
 	testCases, parserError := parseFile("test-case.jsonl")
 
 	if parserError != nil {
@@ -44,6 +42,12 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 		//fmt.Fprintf(os.Stderr, "error parsing file: %v\n", parserError)
 		os.Exit(1)
 	}
+
+	defer wg.Done()
+	_ = godotenv.Load() // ignore error; .env is optional
+	server := os.Getenv("SMPP_HOST") + ":" + os.Getenv("SMPP_PORT")
+	systemId := os.Getenv("SYSTEM_ID")
+	password := os.Getenv("PASSWORD")
 
 	auth := gosmpp.Auth{
 		SMSC:       server,
@@ -97,7 +101,7 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	for i, testCase := range testCases {
 		fmt.Printf("Test #%d:\n", i+1)
 		//fmt.Printf("Test #%s:\n", testCase)
-		if err = trans.Transceiver().Submit(newSubmitSM(testCase.InputPdu)); err != nil {
+		if err = trans.Transceiver().Submit(newSubmitSM(testCase)); err != nil {
 			fmt.Println(err)
 		}
 		time.Sleep(time.Second)
@@ -118,13 +122,34 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 		switch responsePdu := p.(type) {
 		case *pdu.SubmitSMResp:
 			// Track the response based on sequence number
-			requestPDU, exists := requestTracker[responsePdu.SequenceNumber]
-			if exists {
-				log.Printf("Request: %+v\n", requestPDU) // Print the corresponding request details
+			requestPDU, _ := requestTracker[responsePdu.SequenceNumber]
+			testCase, testCaseExists := testCaseTracker[responsePdu.SequenceNumber]
 
-				log.Printf("Received SubmitSMResp for SequenceNumber %+v\n", responsePdu)
-			} else {
-				log.Printf("No matching SubmitSM request for SequenceNumber %+v\n", responsePdu)
+			//if exists {
+			//	log.Printf("Request: %+v\n", requestPDU) // Print the corresponding request details
+			//
+			//	log.Printf("Received SubmitSMResp for SequenceNumber %+v\n", responsePdu)
+			//} else {
+			//	log.Printf("No matching SubmitSM request for SequenceNumber %+v\n", responsePdu)
+			//}
+			if testCaseExists {
+				log.Printf("Test Case: %+v\n", testCase)     // Print the corresponding test case details
+				log.Printf("Request PDU: %+v\n", requestPDU) // Print the corresponding request details
+				var expectedOutput = testCase.ExpectedOutput
+				if int32(responsePdu.Header.CommandStatus) != int32(*expectedOutput.CommandStatus) {
+					log.Printf(
+						"Test case failed for TestCase %d",
+						testCase.TestCaseId,
+					)
+					log.Printf(
+						"CommandStatus mismatch with TestCase %d. Expected: %d, Got: %d\n",
+						testCase.TestCaseId,
+						*expectedOutput.CommandStatus,
+						responsePdu.Header.CommandStatus,
+					)
+					os.Exit(1)
+				}
+
 			}
 		case *pdu.GenericNack:
 			fmt.Println("GenericNack Received")
@@ -171,7 +196,9 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 	}
 }
 
-func newSubmitSM(requestPDU InputPDU) *pdu.SubmitSM {
+func newSubmitSM(testcase TestCase) *pdu.SubmitSM {
+	requestPDU := testcase.InputPdu
+
 	// build up submitSM
 	srcAddr := pdu.NewAddress()
 
@@ -205,6 +232,8 @@ func newSubmitSM(requestPDU InputPDU) *pdu.SubmitSM {
 	submitSM.EsmClass = byte(*requestPDU.EsmClass)
 	// Track the request by sequence_number
 	requestTracker[submitSM.SequenceNumber] = submitSM
+	testCaseTracker[submitSM.SequenceNumber] = &testcase
+
 	return submitSM
 }
 
@@ -268,4 +297,50 @@ func connectToHtppServerUsingTCP() {
 	// Print the HTTP status line
 	log.Println(status) // #F
 
+}
+
+func validateResponseWithExpectedOutput(expectedOutput ExpectedOutput, responsePdu *pdu.SubmitSMResp) bool {
+	if responsePdu == nil {
+		return false
+	}
+
+	// Validate CommandID if expected
+	//if expectedOutput.CommandID != nil {
+	//	expected := *expectedOutput.CommandID
+	//	if responsePdu.CommandID != nil {
+	//		stringComparison(expected, responsePdu.CommandID.String())
+	//		return false
+	//	}
+	//}
+
+	//// Validate CommandStatus if expected
+	//if expectedOutput.CommandStatus != nil {
+	//	if responsePdu.CommandStatus != *expectedOutput.CommandStatus {
+	//		return false
+	//	}
+	//}
+	//
+	//// Validate MessageID if expected
+	//if expectedOutput.MessageID != nil {
+	//	if responsePdu.MessageID != *expectedOutput.MessageID {
+	//		return false
+	//	}
+	//}
+
+	// DeliveryStatus, Segments, Error, Note are not part of SubmitSMResp directly,
+	// so we only log or ignore them (depending on your requirements).
+	// You could extend this check if those are set somewhere else in your system.
+
+	return true
+}
+
+func stringComparison(expected, actual string) bool {
+	expected = strings.ToLower(expected)
+	actual = strings.ToLower(actual)
+
+	found := strings.Contains(actual, expected)
+	if found {
+		fmt.Println("Substring found (case-insensitive)")
+	}
+	return found
 }

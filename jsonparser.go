@@ -12,8 +12,6 @@ import (
 )
 
 // InputPDU models the "input_pdu" object. We use pointer types for optional fields
-// so we can detect when fields are missing.
-
 func init() {
 	// Default GSM 03.38 characters (common set). Source: GSM 03.38 tables (practical subset).
 	def := "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡" +
@@ -34,10 +32,13 @@ func init() {
 func parseFile(path string) ([]TestCase, error) {
 	// Read entire file (same behavior as original). For very large files,
 	// consider streaming with os.Open and json.Decoder directly.
+	//filePath := flag.String("file", "test-case.jsonl", "path to JSON/JSONL file containing test cases")
+	//flag.Parse()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+
 	trimmed := bytes.TrimSpace(b)
 	if len(trimmed) == 0 {
 		return nil, fmt.Errorf("input file is empty")
@@ -246,10 +247,87 @@ func validateTestCase(index int, tc TestCase) ValidationResult {
 //	filePath := flag.String("file", "test-case.jsonl", "path to JSON/JSONL file containing test cases")
 //	flag.Parse()
 //
-//	_, err := parseFile(*filePath)
+//	if *filePath == "" {
+//		fmt.Fprintln(os.Stderr, "Usage: go run main.go -file=messages.json")
+//		os.Exit(2)
+//	}
+//
+//	tests, err := parseFile(*filePath)
 //	if err != nil {
 //		fmt.Fprintf(os.Stderr, "error parsing file: %v\n", err)
 //		os.Exit(1)
 //	}
 //
+//	// Validate each test case and print results
+//	for i, tc := range tests {
+//		res := validateTestCase(i+1, tc)
+//
+//		fmt.Printf("Test #%d:\n", i+1)
+//		// Basic summary of input PDU
+//		if tc.InputPdu.CommandID != nil {
+//			fmt.Printf("  command_id: %s\n", *tc.InputPdu.CommandID)
+//		}
+//		if tc.InputPdu.SourceAddr != nil {
+//			fmt.Printf("  source_addr: %s\n", *tc.InputPdu.SourceAddr)
+//		}
+//		if tc.InputPdu.DestinationAddr != nil {
+//			fmt.Printf("  destination_addr: %s\n", *tc.InputPdu.DestinationAddr)
+//		}
+//		if tc.InputPdu.ShortMessage != nil {
+//			// print a truncated short message for readability
+//			sm := *tc.InputPdu.ShortMessage
+//			if len(sm) > 160 {
+//				sm = sm[:160] + "…"
+//			}
+//			fmt.Printf("  short_message: %q\n", sm)
+//		}
+//		if tc.InputPdu.SmLength != nil {
+//			fmt.Printf("  sm_length: %d\n", *tc.InputPdu.SmLength)
+//		}
+//		if tc.InputPdu.DataCoding != nil {
+//			fmt.Printf("  data_coding: %d\n", *tc.InputPdu.DataCoding)
+//		}
+//
+//		// Validation results
+//		if res.Valid {
+//			fmt.Printf("  result: VALID\n")
+//			fmt.Printf("  computed_sm_length: %d\n", res.ComputedSmLength)
+//			if res.Segments > 1 {
+//				fmt.Printf("  segments: %d\n", res.Segments)
+//			}
+//			if res.Note != "" {
+//				fmt.Printf("  note: %s\n", res.Note)
+//			}
+//		} else {
+//			fmt.Printf("  result: INVALID\n")
+//			for _, e := range res.Errors {
+//				fmt.Printf("  error: %s\n", e)
+//			}
+//		}
+//
+//		if tc.ExpectedOutput.DeliveryStatus != nil {
+//			fmt.Printf("  expected.delivery_status: %s\n", *tc.ExpectedOutput.DeliveryStatus)
+//		}
+//		if tc.ExpectedOutput.MessageID != nil {
+//			fmt.Printf("  expected.message_id: %s\n", *tc.ExpectedOutput.MessageID)
+//		}
+//		if tc.ExpectedOutput.Segments != nil {
+//			fmt.Printf("  expected.segments: %d\n", *tc.ExpectedOutput.Segments)
+//		}
+//		if tc.ExpectedOutput.Error != nil {
+//			fmt.Printf("  expected.error: %s\n", *tc.ExpectedOutput.Error)
+//		}
+//
+//		// Comparison summary
+//		if res.ExpectedOutputMatch {
+//			fmt.Printf("  expected_output_match: YES\n")
+//		} else {
+//			fmt.Printf("  expected_output_match: NO\n")
+//			for _, mm := range res.Mismatches {
+//				fmt.Printf("    mismatch: %s\n", mm)
+//			}
+//		}
+//
+//		fmt.Println(strings.Repeat("-", 80))
+//	}
 //}

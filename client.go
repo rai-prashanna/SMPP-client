@@ -118,5 +118,14 @@ func (c *Client) onPDU(p pdu.PDU, _ bool) {
 		}
 	default:
 		log.Printf("Unhandled PDU type: %T", pd)
+		log.Printf("Closing session: %T", pd)
+		err := c.Close()
+		if err != nil {
+			log.Printf("unable to close session: %T", pd)
+
+			return
+		}
+		log.Printf("CLosed session: %T", pd)
+
 	}
 }
