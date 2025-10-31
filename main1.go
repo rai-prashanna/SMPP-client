@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/tls"
 	_ "encoding/json"
 	"fmt"
@@ -26,6 +27,7 @@ func main() {
 	go sendingAndReceiveSMS(&wg)
 
 	wg.Wait()
+
 }
 
 func sendingAndReceiveSMS(wg *sync.WaitGroup) {
@@ -92,10 +94,10 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	}()
 
 	// sending SMS(s)
-	for i, _ := range testCases {
+	for i, testCase := range testCases {
 		fmt.Printf("Test #%d:\n", i+1)
 		//fmt.Printf("Test #%s:\n", testCase)
-		if err = trans.Transceiver().Submit(newSubmitSM()); err != nil {
+		if err = trans.Transceiver().Submit(newSubmitSM(testCase.InputPdu)); err != nil {
 			fmt.Println(err)
 		}
 		time.Sleep(time.Second)
@@ -169,22 +171,23 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 	}
 }
 
-func newSubmitSM() *pdu.SubmitSM {
+func newSubmitSM(requestPDU InputPDU) *pdu.SubmitSM {
 	// build up submitSM
 	srcAddr := pdu.NewAddress()
-	srcAddr.SetTon(1)
-	srcAddr.SetNpi(0)
-	_ = srcAddr.SetAddress("00")
+
+	srcAddr.SetTon(byte(*requestPDU.SourceAddrTON))
+	srcAddr.SetNpi(byte(*requestPDU.SourceAddrNPI))
+	_ = srcAddr.SetAddress(*requestPDU.SourceAddr)
 
 	destAddr := pdu.NewAddress()
-	destAddr.SetTon(1)
-	destAddr.SetNpi(1)
-	_ = destAddr.SetAddress("99" + "522241")
+	destAddr.SetTon(byte(*requestPDU.DestAddrTON))
+	destAddr.SetNpi(byte(*requestPDU.DestAddrNPI))
+	_ = destAddr.SetAddress(*requestPDU.DestinationAddr)
 
 	submitSM := pdu.NewSubmitSM().(*pdu.SubmitSM)
 	submitSM.SourceAddr = srcAddr
 	submitSM.DestAddr = destAddr
-	_ = submitSM.Message.SetMessageWithEncoding("HELLO WORLD!", data.UCS2)
+	_ = submitSM.Message.SetMessageWithEncoding(*requestPDU.ShortMessage, data.UCS2)
 	submitSM.ProtocolID = 0
 	submitSM.RegisteredDelivery = 1
 	submitSM.ReplaceIfPresentFlag = 0
@@ -201,4 +204,29 @@ func isConcatenatedDone(parts []string, total byte) bool {
 		}
 	}
 	return total == 0
+}
+
+func connectToHtppServerUsingTCP() {
+	//	Connect securely to example.com on port 443 (HTTPS)
+
+	conn, err := tls.Dial("tcp", "example.com:443", nil) // #A
+	if err != nil {                                      // #B
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	// Send an HTTPS GET request
+	if _, err := fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"); err != nil {
+		log.Fatal(err)
+	}
+
+	// Read the first line of the response (status line)
+	status, err := bufio.NewReader(conn).ReadString('\n') // #D
+	if err != nil {                                       // #E
+		log.Fatal(err)
+	}
+
+	// Print the HTTP status line
+	log.Println(status) // #F
+
 }
