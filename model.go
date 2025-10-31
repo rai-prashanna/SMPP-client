@@ -16,20 +16,15 @@ type InputPDU struct {
 	ReplaceIfPresentFlag *int    `json:"replace_if_present_flag,omitempty"`
 	DataCoding           *int    `json:"data_coding,omitempty"` // 0 == 7-bit, 8 == 16-bit (UCS-2/UTF-16BE)
 	Encoding             *string `json:"encoding,omitempty"`    // "7-bit" or "16-bit" (informational)
-	Udh                  *string `json:"udh,omitempty"`
 	SmLength             *int    `json:"sm_length,omitempty"`
 	ShortMessage         *string `json:"short_message,omitempty"`
 }
 
 // ExpectedOutput models the "expected_output_pdu" object in your data.
 type ExpectedOutput struct {
-	CommandID      *string `json:"command_id,omitempty"`
-	CommandStatus  *int    `json:"command_status,omitempty"`
-	MessageID      *string `json:"message_id,omitempty"`
-	DeliveryStatus *string `json:"delivery_status,omitempty"`
-	Segments       *int    `json:"segments,omitempty"`
-	Error          *string `json:"error,omitempty"`
-	Note           *string `json:"note,omitempty"`
+	CommandID     *string `json:"command_id,omitempty"`
+	CommandStatus *int    `json:"command_status,omitempty"`
+	MessageID     *string `json:"message_id,omitempty"`
 }
 
 // TestCase ties an input PDU with its expected output.

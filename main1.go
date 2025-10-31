@@ -109,12 +109,6 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 		time.Sleep(time.Second)
 	}
 
-	//for i := 0; i < len(testCases); i++ {
-	//	if err = trans.Transceiver().Submit(newSubmitSM()); err != nil {
-	//		color.Green(err)
-	//	}
-	//	time.Sleep(time.Second)
-	//}
 }
 
 func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
@@ -126,7 +120,7 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 			// Track the response based on sequence number
 			_, _ = requestTracker[responsePdu.SequenceNumber]
 			testCase, testCaseExists := testCaseTracker[responsePdu.SequenceNumber]
-
+			color.Green("Received SubmitSMResp for SequenceNumber %+v\n", responsePdu)
 			if testCaseExists {
 				var expectedOutput = testCase.ExpectedOutput
 				if int32(responsePdu.Header.CommandStatus) != int32(*expectedOutput.CommandStatus) {

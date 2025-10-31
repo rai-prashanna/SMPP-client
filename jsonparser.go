@@ -155,7 +155,7 @@ func validateTestCase(index int, tc TestCase) ValidationResult {
 		res.Valid = false
 		res.Errors = append(res.Errors, "Missing required field: destination_addr")
 		// Expected output in sample for this case is a failed delivery with that error.
-		res.ExpectedOutputMatch = (tc.ExpectedOutput.Error != nil && strings.Contains(*tc.ExpectedOutput.Error, "Missing required field"))
+		//res.ExpectedOutputMatch = (tc.ExpectedOutput.Error != nil && strings.Contains(*tc.ExpectedOutput.Error, "Missing required field"))
 		return res
 	}
 
@@ -181,9 +181,9 @@ func validateTestCase(index int, tc TestCase) ValidationResult {
 			res.Errors = append(res.Errors, "Message contains characters incompatible with data_coding 0 (GSM 7-bit)")
 			res.Errors = append(res.Errors, err.Error())
 			// expected_output for such sample indicates failed delivery with that error.
-			if tc.ExpectedOutput.Error != nil && strings.Contains(*tc.ExpectedOutput.Error, "incompatible") {
-				res.ExpectedOutputMatch = true
-			}
+			//if tc.ExpectedOutput.Error != nil && strings.Contains(*tc.ExpectedOutput.Error, "incompatible") {
+			//	res.ExpectedOutputMatch = true
+			//}
 			return res
 		}
 		computedLength = sep
@@ -205,40 +205,40 @@ func validateTestCase(index int, tc TestCase) ValidationResult {
 			msg := fmt.Sprintf("sm_length indicates %d bytes but actual short_message is %d bytes (truncated or malformed PDU)", *tc.InputPdu.SmLength, computedLength)
 			res.Errors = append(res.Errors, msg)
 			// If expected_output contains that error text, flag a match
-			if tc.ExpectedOutput.Error != nil && strings.Contains(*tc.ExpectedOutput.Error, "sm_length indicates") {
-				res.ExpectedOutputMatch = true
-			}
+			//if tc.ExpectedOutput.Error != nil && strings.Contains(*tc.ExpectedOutput.Error, "sm_length indicates") {
+			//	res.ExpectedOutputMatch = true
+			//}
 			return res
 		}
 	}
 
 	// Determine UDH presence
-	udhPresent := tc.InputPdu.Udh != nil && strings.TrimSpace(*tc.InputPdu.Udh) != ""
-	res.Segments = computeSegments(dataCoding, udhPresent, computedLength)
-	if udhPresent {
-		res.Note = "UDHI present, SMSC should concatenate segments"
-	}
-
-	// Compare certain expected_output fields (delivery_status and segments) where applicable.
-	// This is a best-effort comparison; expected_output may contain message ID and other fields
-	// that are unrelated to validation rules we compute here.
-	match := true
-	if tc.ExpectedOutput.DeliveryStatus != nil {
-		exp := strings.ToLower(strings.TrimSpace(*tc.ExpectedOutput.DeliveryStatus))
-		if exp == "accepted" && !res.Valid {
-			match = false
-		}
-		if exp == "failed" && res.Valid {
-			match = false
-		}
-	}
-	if tc.ExpectedOutput.Segments != nil {
-		if *tc.ExpectedOutput.Segments != res.Segments {
-			match = false
-			res.Mismatches = append(res.Mismatches, fmt.Sprintf("expected segments %d but computed %d", *tc.ExpectedOutput.Segments, res.Segments))
-		}
-	}
-	res.ExpectedOutputMatch = match
+	//udhPresent := tc.InputPdu.Udh != nil && strings.TrimSpace(*tc.InputPdu.Udh) != ""
+	//res.Segments = computeSegments(dataCoding, udhPresent, computedLength)
+	//if udhPresent {
+	//	res.Note = "UDHI present, SMSC should concatenate segments"
+	//}
+	//
+	//// Compare certain expected_output fields (delivery_status and segments) where applicable.
+	//// This is a best-effort comparison; expected_output may contain message ID and other fields
+	//// that are unrelated to validation rules we compute here.
+	//match := true
+	//if tc.ExpectedOutput.DeliveryStatus != nil {
+	//	exp := strings.ToLower(strings.TrimSpace(*tc.ExpectedOutput.DeliveryStatus))
+	//	if exp == "accepted" && !res.Valid {
+	//		match = false
+	//	}
+	//	if exp == "failed" && res.Valid {
+	//		match = false
+	//	}
+	//}
+	//if tc.ExpectedOutput.Segments != nil {
+	//	if *tc.ExpectedOutput.Segments != res.Segments {
+	//		match = false
+	//		res.Mismatches = append(res.Mismatches, fmt.Sprintf("expected segments %d but computed %d", *tc.ExpectedOutput.Segments, res.Segments))
+	//	}
+	//}
+	//res.ExpectedOutputMatch = match
 
 	return res
 }

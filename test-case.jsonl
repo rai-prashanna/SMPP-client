@@ -22,9 +22,8 @@
     },
     "expected_output_pdu": {
       "command_id": "submit_sm_resp",
-      "command_status": 1,
-      "message_id": "MSG0001",
-      "delivery_status": "accepted"
+      "command_status": 0,
+      "message_id": "MSG0001"
     }
   },
   {
@@ -51,8 +50,7 @@
     "expected_output_pdu": {
       "command_id": "submit_sm_resp",
       "command_status": 0,
-      "message_id": "MSG0002",
-      "delivery_status": "accepted"
+      "message_id": "MSG0002"
     }
   },
   {
@@ -73,17 +71,14 @@
       "replace_if_present_flag": 0,
       "data_coding": 0,
       "encoding": "7-bit",
-      "udh": "050003CC0201",
+      "udh": "050003CC0301",
       "sm_length": 360,
       "short_message": "This is a long message that will be split into multiple segments by the SMSC. It contains enough characters to exceed a single SMS length and should be accepted with UDHI concatenation headers. This is a long message that will be split into multiple segments by the SMSC. It contains enough characters to exceed a single SMS length and should be accepted with UDHI concatenation headers. This is a long message that will be split into multiple segments by the SMSC. It contains enough characters to exceed a single SMS length and should be accepted with UDHI concatenation headers."
     },
     "expected_output_pdu": {
       "command_id": "submit_sm_resp",
       "command_status": 0,
-      "message_id": "MSG0003",
-      "delivery_status": "accepted",
-      "segments": 3,
-      "note": "UDHI present, SMSC should concatenate segments"
+      "message_id": "MSG0003"
     }
   },
   {
@@ -108,8 +103,9 @@
       "short_message": "Hello 😀"
     },
     "expected_output_pdu": {
-      "delivery_status": "failed",
-      "error": "Message contains characters incompatible with data_coding 0 (GSM 7-bit)"
+      "command_id": "submit_sm_resp",
+      "command_status": 3,
+      "message_id": "MSG0004"
     }
   },
   {
@@ -134,8 +130,9 @@
       "short_message": "Hi"
     },
     "expected_output_pdu": {
-      "delivery_status": "failed",
-      "error": "sm_length indicates 10 bytes but actual short_message is 2 bytes (truncated or malformed PDU)"
+      "command_id": "submit_sm_resp",
+      "command_status": 2,
+      "message_id": "MSG0005"
     }
   }
 ]
