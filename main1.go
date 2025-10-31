@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fatih/color"
+	_ "github.com/fatih/color"
 	"github.com/joho/godotenv"
 	"github.com/linxGnu/gosmpp"
 	"github.com/linxGnu/gosmpp/data"
@@ -38,7 +40,7 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	testCases, parserError := parseFile("test-case.jsonl")
 
 	if parserError != nil {
-		fmt.Println("Rebinding but error:", parserError)
+		color.Green("Rebinding but error:", parserError)
 		//fmt.Fprintf(os.Stderr, "error parsing file: %v\n", parserError)
 		os.Exit(1)
 	}
@@ -75,17 +77,17 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 			},
 
 			OnReceivingError: func(err error) {
-				fmt.Println("Receiving PDU/Network error:", err)
+				color.Green("Receiving PDU/Network error:", err)
 			},
 
 			OnRebindingError: func(err error) {
-				fmt.Println("Rebinding but error:", err)
+				color.Green("Rebinding but error:", err)
 			},
 
 			OnPDU: handlePDU(&trans),
 
 			OnClosed: func(state gosmpp.State) {
-				fmt.Println(state)
+				color.Green("State :", state)
 			},
 		}, 5*time.Second)
 
@@ -99,17 +101,17 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 
 	// sending SMS(s)
 	for i, testCase := range testCases {
-		fmt.Printf("Test #%d:\n", i+1)
-		//fmt.Printf("Test #%s:\n", testCase)
+		color.Green("Test #%d:\n", i+1)
+
 		if err = trans.Transceiver().Submit(newSubmitSM(testCase)); err != nil {
-			fmt.Println(err)
+			color.Red("Error ", err)
 		}
 		time.Sleep(time.Second)
 	}
 
 	//for i := 0; i < len(testCases); i++ {
 	//	if err = trans.Transceiver().Submit(newSubmitSM()); err != nil {
-	//		fmt.Println(err)
+	//		color.Green(err)
 	//	}
 	//	time.Sleep(time.Second)
 	//}
@@ -122,26 +124,17 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 		switch responsePdu := p.(type) {
 		case *pdu.SubmitSMResp:
 			// Track the response based on sequence number
-			requestPDU, _ := requestTracker[responsePdu.SequenceNumber]
+			_, _ = requestTracker[responsePdu.SequenceNumber]
 			testCase, testCaseExists := testCaseTracker[responsePdu.SequenceNumber]
 
-			//if exists {
-			//	log.Printf("Request: %+v\n", requestPDU) // Print the corresponding request details
-			//
-			//	log.Printf("Received SubmitSMResp for SequenceNumber %+v\n", responsePdu)
-			//} else {
-			//	log.Printf("No matching SubmitSM request for SequenceNumber %+v\n", responsePdu)
-			//}
 			if testCaseExists {
-				log.Printf("Test Case: %+v\n", testCase)     // Print the corresponding test case details
-				log.Printf("Request PDU: %+v\n", requestPDU) // Print the corresponding request details
 				var expectedOutput = testCase.ExpectedOutput
 				if int32(responsePdu.Header.CommandStatus) != int32(*expectedOutput.CommandStatus) {
-					log.Printf(
+					color.Red(
 						"Test case failed for TestCase %d",
 						testCase.TestCaseId,
 					)
-					log.Printf(
+					color.Red(
 						"CommandStatus mismatch with TestCase %d. Expected: %d, Got: %d\n",
 						testCase.TestCaseId,
 						*expectedOutput.CommandStatus,
@@ -152,17 +145,17 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 
 			}
 		case *pdu.GenericNack:
-			fmt.Println("GenericNack Received")
+			color.Green("GenericNack Received")
 
 		case *pdu.EnquireLinkResp:
-			fmt.Println("EnquireLinkResp Received")
+			color.Green("EnquireLinkResp Received")
 
 		case *pdu.DataSM:
-			fmt.Printf("DataSM:%+v\n", responsePdu)
+			color.Green("DataSM:%+v\n", responsePdu)
 
 		case *pdu.DeliverSM:
-			fmt.Printf("DeliverSM:%+v\n", responsePdu)
-			log.Println(responsePdu.Message.GetMessage())
+			color.Green("DeliverSM:%+v\n", responsePdu)
+			color.Green(responsePdu.Message.GetMessage())
 			message, err := responsePdu.Message.GetMessage()
 			if err != nil {
 				log.Fatal(err)
@@ -175,16 +168,16 @@ func handlePDU(trans **gosmpp.Session) func(pdu.PDU, bool) {
 				concatenated[reference][sequence-1] = message
 			}
 			if !found {
-				log.Println(message)
+				color.Green(message)
 			} else if parts, ok := concatenated[reference]; ok && isConcatenatedDone(parts, totalParts) {
-				log.Println(strings.Join(parts, ""))
+				color.Green(strings.Join(parts, ""))
 				delete(concatenated, reference)
 			}
 			// endregion
 
 		case *pdu.UnbindResp:
-			fmt.Printf("UnbindResp:%+v\n", responsePdu)
-			fmt.Println("UnbindResp received — closing session...")
+			color.Green("UnbindResp:%+v\n", responsePdu)
+			color.Green("UnbindResp received — closing session...")
 			if *trans != nil {
 				_ = (*trans).Close()
 			}
@@ -295,7 +288,7 @@ func connectToHtppServerUsingTCP() {
 	}
 
 	// Print the HTTP status line
-	log.Println(status) // #F
+	color.Green(status) // #F
 
 }
 
@@ -340,7 +333,7 @@ func stringComparison(expected, actual string) bool {
 
 	found := strings.Contains(actual, expected)
 	if found {
-		fmt.Println("Substring found (case-insensitive)")
+		color.Green("Substring found (case-insensitive)")
 	}
 	return found
 }
