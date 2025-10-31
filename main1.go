@@ -180,18 +180,29 @@ func newSubmitSM(requestPDU InputPDU) *pdu.SubmitSM {
 	_ = srcAddr.SetAddress(*requestPDU.SourceAddr)
 
 	destAddr := pdu.NewAddress()
-	destAddr.SetTon(byte(*requestPDU.DestAddrTON))
-	destAddr.SetNpi(byte(*requestPDU.DestAddrNPI))
-	_ = destAddr.SetAddress(*requestPDU.DestinationAddr)
+	if requestPDU.DestAddrTON != nil {
+		destAddr.SetTon(byte(*requestPDU.DestAddrTON))
+	}
+	if requestPDU.DestAddrNPI != nil {
+		destAddr.SetNpi(byte(*requestPDU.DestAddrNPI))
+	}
+
+	if requestPDU.DestinationAddr != nil {
+		err := destAddr.SetAddress(*requestPDU.DestinationAddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	submitSM := pdu.NewSubmitSM().(*pdu.SubmitSM)
 	submitSM.SourceAddr = srcAddr
 	submitSM.DestAddr = destAddr
-	_ = submitSM.Message.SetMessageWithEncoding(*requestPDU.ShortMessage, data.UCS2)
-	submitSM.ProtocolID = 0
-	submitSM.RegisteredDelivery = 1
-	submitSM.ReplaceIfPresentFlag = 0
-	submitSM.EsmClass = 0
+	dataCode := byteToDataCoding(byte(*requestPDU.DataCoding))
+	_ = submitSM.Message.SetMessageWithEncoding(*requestPDU.ShortMessage, dataCode)
+	submitSM.ProtocolID = byte(*requestPDU.ProtocolID)
+	submitSM.RegisteredDelivery = byte(*requestPDU.RegisteredDelivery)
+	submitSM.ReplaceIfPresentFlag = byte(*requestPDU.ReplaceIfPresentFlag)
+	submitSM.EsmClass = byte(*requestPDU.EsmClass)
 	// Track the request by sequence_number
 	requestTracker[submitSM.SequenceNumber] = submitSM
 	return submitSM
@@ -204,6 +215,34 @@ func isConcatenatedDone(parts []string, total byte) bool {
 		}
 	}
 	return total == 0
+}
+
+// FromDataCodingExtended maps a Data Coding Scheme (DCS) byte value
+// to its corresponding Encoding implementation, including GSM7BITPACKED.
+func byteToDataCoding(code byte) data.Encoding {
+	switch code {
+	case data.UCS2Coding:
+		return data.UCS2
+	case data.HEBREWCoding:
+		return data.HEBREW
+	case data.CYRILLICCoding:
+		return data.CYRILLIC
+	case data.BINARY8BIT2Coding:
+		return data.BINARY8BIT2
+	case data.LATIN1Coding:
+		return data.LATIN1
+	case data.BINARY8BIT1Coding:
+		return data.BINARY8BIT1
+	case data.ASCIICoding:
+		return data.ASCII
+	case data.GSM7BITCoding:
+		// You can choose to default to GSM7BIT or GSM7BITPACKED here.
+		// Typically GSM7BIT is the standard, but if you need the packed variant, return GSM7BITPACKED instead.
+		return data.GSM7BIT
+	default:
+		// Fallback: assume GSM7BITPACKED if unknown coding is given
+		return data.GSM7BITPACKED
+	}
 }
 
 func connectToHtppServerUsingTCP() {
